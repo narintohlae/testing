@@ -2533,7 +2533,7 @@ async importFromGoogleSheet(isAutomatic = false) {
         return totalPrice;
     },
     prepareSearchableProducts() {
-        const flatList = [];
+        const itemsMap = new Map();
         this.state.productsFromFirestore.forEach(product => {
             const isSuspended = !!product.suspended;
             if (product.pricingUnits && Array.isArray(product.pricingUnits)) {
@@ -2547,25 +2547,26 @@ async importFromGoogleSheet(isAutomatic = false) {
                         productCode: product.productCode || '',
                         productName: product.productName,
                         suspended: isSuspended,
-               
-                         category: product.category || '',
+                        category: product.category || '',
                         baseUnit: product.baseUnit || '',
                         stockInBaseUnits: product.stockInBaseUnits || 0,
                         soldCount: product.soldCount || 0,
                         pricingUnit: unit,
-         
-                               display: `${product.productName} (${unit.unitName})`,
+                        display: `${product.productName} (${unit.unitName})`,
                         barcode: unit.barcode || '',
                         price: basePrice,
-                        _searchableText: [product.productCode, product.productName, product.category, unit.unitName, unit.barcode].join(' ').toLowerCase().replace(/\s+/g, 
-                        ' '),
+                        _searchableText: [product.productCode, product.productName, product.category, unit.unitName, unit.barcode].join(' ').toLowerCase().replace(/\s+/g, ' '),
                         cartItemId: cartItemId
                     };
-                    flatList.push(searchableItem);
+                    
+                    // Deduplicate by cartItemId
+                    if (!itemsMap.has(cartItemId)) {
+                        itemsMap.set(cartItemId, searchableItem);
+                    }
                 });
             }
         });
-        this.state.searchableProductUnits = flatList;
+        this.state.searchableProductUnits = Array.from(itemsMap.values());
     },
     async handleSaveProduct(e) {
         e.preventDefault();
