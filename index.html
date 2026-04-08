@@ -5,46 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ระบบลงเวลามินิมอล</title>
     <style>
-        /* ส่วนของการออกแบบความสวยงาม (CSS) */
+        /* CSS เหมือนเดิม */
         @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;700&display=swap');
-        
-        body { 
-            font-family: 'Sarabun', sans-serif; 
-            background-color: #f4f7f6; 
-            display: flex; 
-            justify-content: center; 
-            align-items: center; 
-            height: 100vh; 
-            margin: 0; 
-        }
-        .app-container { 
-            background: white; 
-            padding: 30px 20px; 
-            border-radius: 16px; 
-            box-shadow: 0 10px 20px rgba(0,0,0,0.05); 
-            width: 100%; 
-            max-width: 350px; 
-            text-align: center; 
-        }
+        body { font-family: 'Sarabun', sans-serif; background-color: #f4f7f6; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .app-container { background: white; padding: 30px 20px; border-radius: 16px; box-shadow: 0 10px 20px rgba(0,0,0,0.05); width: 100%; max-width: 350px; text-align: center; }
         h1 { font-size: 1.2em; color: #555; margin-top: 0; }
         .clock { font-size: 3em; font-weight: bold; color: #222; margin: 20px 0; }
         .btn-group { display: flex; gap: 15px; margin-bottom: 25px; }
-        button { 
-            flex: 1; 
-            padding: 15px; 
-            border: none; 
-            border-radius: 12px; 
-            font-size: 1em; 
-            font-family: 'Sarabun', sans-serif;
-            font-weight: bold; 
-            color: white; 
-            cursor: pointer; 
-            transition: transform 0.1s; 
-        }
+        button { flex: 1; padding: 15px; border: none; border-radius: 12px; font-size: 1em; font-family: 'Sarabun', sans-serif; font-weight: bold; color: white; cursor: pointer; transition: transform 0.1s; }
         button:active { transform: scale(0.95); }
-        .btn-in { background-color: #10b981; } /* สีเขียวมินิมอล */
-        .btn-out { background-color: #ef4444; } /* สีแดงมินิมอล */
-        
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-in { background-color: #10b981; } 
+        .btn-out { background-color: #ef4444; } 
         .log-container { text-align: left; background: #f9fafb; padding: 15px; border-radius: 12px; font-size: 0.9em; max-height: 200px; overflow-y: auto; }
         .log-title { font-weight: bold; color: #666; margin-bottom: 10px; display: block; border-bottom: 1px solid #eee; padding-bottom: 5px; }
         .log-item { border-bottom: 1px dashed #e5e7eb; padding: 8px 0; display: flex; flex-direction: column; gap: 4px;}
@@ -59,8 +31,8 @@
         <div class="clock" id="clockDisplay">00:00</div>
         
         <div class="btn-group">
-            <button class="btn-in" onclick="handleTimeRecord('เข้างาน')">เข้างาน</button>
-            <button class="btn-out" onclick="handleTimeRecord('ออกงาน')">ออกงาน</button>
+            <button class="btn-in" id="btnIn" onclick="handleTimeRecord('เข้างาน', this)">เข้างาน</button>
+            <button class="btn-out" id="btnOut" onclick="handleTimeRecord('ออกงาน', this)">ออกงาน</button>
         </div>
 
         <div class="log-container">
@@ -71,54 +43,69 @@
     </div>
 
     <script>
-        // ส่วนของการทำงาน (JavaScript)
-        
-        // 1. ทำให้เวลากระพริบและเดินตลอดเวลา
+        // --- 🔴 นำ URL ที่ได้จาก Google Apps Script มาวางในเครื่องหมายคำพูดด้านล่างนี้ ---
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyXuioI9v6FsX3lXZXej1_NXb-Mi8JYC_8JKSQH_8laQSud39ThLGm6X_1j38MiMNPv/exec';
+
         function updateTime() {
             const now = new Date();
-            const timeString = now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-            document.getElementById('clockDisplay').innerText = timeString;
+            document.getElementById('clockDisplay').innerText = now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         }
         setInterval(updateTime, 1000);
-        updateTime(); // เรียกใช้งานทันทีตอนเปิดหน้าเว็บ
+        updateTime();
 
-        // 2. ฟังก์ชันเมื่อกดปุ่มเข้า-ออกงาน
-        function handleTimeRecord(type) {
+        function handleTimeRecord(type, btnElement) {
+            // ป้องกันการกดเบิ้ล
+            const originalText = btnElement.innerText;
+            btnElement.innerText = "กำลังบันทึก...";
+            btnElement.disabled = true;
+
             const now = new Date();
+            const dateString = now.toLocaleDateString('th-TH');
             const timeString = now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
             
-            // เช็คว่ามือถือรองรับ GPS ไหม
             if (navigator.geolocation) {
-                // ขอพิกัด GPS
                 navigator.geolocation.getCurrentPosition(
                     (position) => {
                         const lat = position.coords.latitude.toFixed(5);
                         const lon = position.coords.longitude.toFixed(5);
-                        addLogToScreen(type, timeString, `พิกัด: ${lat}, ${lon}`);
+                        saveData(type, dateString, timeString, `${lat}, ${lon}`, btnElement, originalText);
                     },
                     (error) => {
-                        addLogToScreen(type, timeString, "ไม่สามารถดึงพิกัด GPS ได้");
+                        saveData(type, dateString, timeString, "ไม่สามารถดึงพิกัดได้", btnElement, originalText);
                     }
                 );
             } else {
-                addLogToScreen(type, timeString, "เบราว์เซอร์ไม่รองรับ GPS");
+                saveData(type, dateString, timeString, "ไม่รองรับ GPS", btnElement, originalText);
             }
         }
 
-        // 3. ฟังก์ชันนำข้อมูลมาแสดงบนหน้าจอ
-        function addLogToScreen(type, time, locationText) {
+        function saveData(type, date, time, location, btnElement, originalText) {
+            // 1. นำไปแสดงบนหน้าจอทันที
             const logList = document.getElementById('logList');
             const color = type === 'เข้างาน' ? '#10b981' : '#ef4444';
-            
             const newLog = `
                 <div class="log-item">
                     <div><strong style="color: ${color};">${type}</strong> เวลา ${time} น.</div>
-                    <div class="loc">📍 ${locationText}</div>
-                </div>
-            `;
-            
-            // แทรกประวัติใหม่ไว้บนสุด
+                    <div class="loc">📍 ${location}</div>
+                </div>`;
             logList.innerHTML = newLog + logList.innerHTML;
+
+            // 2. ส่งข้อมูลไปเก็บที่ Google Sheets
+            fetch(SCRIPT_URL, {
+                method: 'POST',
+                mode: 'no-cors', // บังคับเพื่อไม่ให้ติด Error ข้ามโดเมน
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ date: date, time: time, type: type, location: location })
+            }).then(() => {
+                // คืนค่าปุ่มกลับมาให้กดใหม่ได้
+                btnElement.innerText = originalText;
+                btnElement.disabled = false;
+            }).catch((error) => {
+                console.error('Error:', error);
+                btnElement.innerText = originalText;
+                btnElement.disabled = false;
+                alert("มีข้อผิดพลาดในการบันทึกข้อมูล กรุณาลองใหม่");
+            });
         }
     </script>
 </body>
