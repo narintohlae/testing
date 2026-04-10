@@ -491,13 +491,33 @@
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, addDoc, onSnapshot, doc, setDoc, getDoc, deleteDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        let firebaseConfig = {};
-        try { firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}'); } catch (e) {}
+        // ==========================================
+        // 🔴 นำค่า Firebase Config ของคุณมาวางแทนที่ตรงนี้
+        // ==========================================
+        const myFirebaseConfig = {
+            apiKey: "AIzaSyD-RzkBZ3lXFodonqoMFIrpuCwQ4JPr71g",
+            authDomain: "we-la-tham-ngan.firebaseapp.com",
+            projectId: "we-la-tham-ngan",
+            storageBucket: "we-la-tham-ngan.firebasestorage.app",
+            messagingSenderId: "321115203647",
+            appId: "1:321115203647:web:9d8d11ed78c4e949e3b08a",
+            measurementId: "G-71P7D9NKJK"
+        };
+
+        let firebaseConfig = myFirebaseConfig;
+        try { 
+            // ระบบจะใช้ myFirebaseConfig เมื่อรันบน Github Pages
+            if (typeof __firebase_config !== 'undefined' && __firebase_config !== '{}') {
+                firebaseConfig = JSON.parse(__firebase_config); 
+            }
+        } catch (e) {}
         
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-time-tracker';
+        
+        // กำหนดชื่อ App ID ของคุณเองเพื่อไม่ให้ข้อมูลไปปนกับแอพอื่นใน Firebase
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'my-company-timetracker';
 
         let currentUser = null, userProfile = null, savedEmpId = null;
         let allLogs = [], allProfiles = [], allLeaves = [], allHolidays = [];
