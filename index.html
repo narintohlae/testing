@@ -94,6 +94,17 @@
                 <!-- Section: บันทึกเวลา -->
                 <div id="section-emp-time" class="space-y-6">
                     
+                    <!-- กล่องประกาศบริษัท -->
+                    <div id="emp-announcement-box" class="hide bg-gradient-to-r from-blue-50 to-indigo-50 border-l-4 border-blue-500 p-4 rounded-r-2xl shadow-sm mb-2">
+                        <div class="flex items-start">
+                            <div class="flex-shrink-0"><i class="fa-solid fa-bullhorn text-blue-500 mt-1"></i></div>
+                            <div class="ml-3">
+                                <h3 class="text-sm font-bold text-blue-800">ประกาศจากบริษัท</h3>
+                                <div id="emp-announcement-text" class="text-sm text-blue-600 mt-1 whitespace-pre-wrap"></div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- แดชบอร์ดส่วนตัวพนักงาน -->
                     <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
                         <h3 class="font-bold text-gray-700 mb-3"><i class="fa-solid fa-chart-simple text-blue-500 mr-2"></i>สรุปงานเดือนนี้ (<span id="emp-month-label">...</span>)</h3>
@@ -140,20 +151,29 @@
                         <canvas id="photo-canvas" class="hide"></canvas>
 
                         <!-- ช่องพิมพ์หมายเหตุ -->
-                        <div class="mt-4">
+                        <div class="mt-4 mb-2">
                             <input type="text" id="log-remark" placeholder="หมายเหตุเพิ่มเติม (ถ้ามี) เช่น ไปพบลูกค้า..." class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm">
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-2 gap-4">
-                        <button id="btn-checkin" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-4 rounded-2xl shadow-lg transition flex flex-col items-center disabled:opacity-50 disabled:cursor-not-allowed" disabled>
-                            <i class="fa-solid fa-sign-in-alt text-2xl mb-1"></i>
-                            <span>เข้างาน</span>
-                        </button>
-                        <button id="btn-checkout" class="bg-rose-500 hover:bg-rose-600 text-white font-bold py-4 rounded-2xl shadow-lg transition flex flex-col items-center disabled:opacity-50 disabled:cursor-not-allowed" disabled>
-                            <i class="fa-solid fa-sign-out-alt text-2xl mb-1"></i>
-                            <span>ออกงาน</span>
-                        </button>
+                    <div>
+                        <!-- แสดงสถานะของวันนี้ -->
+                        <div class="text-center mb-3">
+                            <span class="text-sm font-medium text-gray-600 bg-gray-100 px-3 py-1.5 rounded-full border border-gray-200 shadow-sm">
+                                สถานะวันนี้: <span id="emp-current-status" class="font-bold text-gray-400">กำลังโหลด...</span>
+                            </span>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-4">
+                            <button id="btn-checkin" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-4 rounded-2xl shadow-lg transition flex flex-col items-center disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                                <i class="fa-solid fa-sign-in-alt text-2xl mb-1"></i>
+                                <span>เข้างาน</span>
+                            </button>
+                            <button id="btn-checkout" class="bg-rose-500 hover:bg-rose-600 text-white font-bold py-4 rounded-2xl shadow-lg transition flex flex-col items-center disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                                <i class="fa-solid fa-sign-out-alt text-2xl mb-1"></i>
+                                <span>ออกงาน</span>
+                            </button>
+                        </div>
                     </div>
 
                     <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
@@ -386,6 +406,15 @@
                 <!-- Section: ตั้งค่าระบบ (Settings) -->
                 <div id="section-admin-settings" class="hide space-y-6">
                     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                        
+                        <h3 class="text-lg font-bold text-gray-800 mb-4"><i class="fa-solid fa-bullhorn text-blue-500 mr-2"></i>ประกาศบริษัท (แจ้งเตือนพนักงาน)</h3>
+                        <p class="text-sm text-gray-500 mb-2">ข้อความประกาศจะแสดงในหน้าแรกของแอปพนักงานทุกคน (ปล่อยว่างหากไม่ต้องการแจ้งประกาศ)</p>
+                        <div class="mb-6">
+                            <textarea id="setting-announcement" rows="3" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="พิมพ์ข้อความประกาศที่ต้องการ..."></textarea>
+                        </div>
+
+                        <hr class="my-6 border-gray-100">
+
                         <div class="flex justify-between items-center mb-4">
                             <h3 class="text-lg font-bold text-gray-800"><i class="fa-solid fa-map-location-dot text-blue-500 mr-2"></i>ตั้งค่าสาขา (Multi-Branch)</h3>
                             <button id="btn-add-branch" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-1.5 rounded-lg text-sm font-medium transition shadow-sm"><i class="fa-solid fa-plus"></i> เพิ่มสาขา</button>
@@ -444,11 +473,11 @@
         let currentEmployee = null; 
         let currentLat = null;
         let currentLng = null;
-        let currentBranchName = null; // เก็บชื่อสาขาที่พนักงานอยู่ใกล้ที่สุด
+        let currentBranchName = null; 
         let capturedPhotoData = null;
         let stream = null;
         
-        let systemSettings = { branches: [], workHours: 8, coreTime: "09:00" };
+        let systemSettings = { branches: [], workHours: 8, coreTime: "09:00", announcement: "" };
         let allLogsRaw = []; 
         let allLogsForExport = [];
         let allEmployeesList = []; 
@@ -484,7 +513,6 @@
                 const docSnap = await getDoc(doc(db, "settings", "general"));
                 if (docSnap.exists()) {
                     systemSettings = { ...systemSettings, ...docSnap.data() };
-                    // Convert old single location to branches array for backward compatibility
                     if (docSnap.data().officeLat && (!systemSettings.branches || systemSettings.branches.length === 0)) {
                         systemSettings.branches = [{ id: Date.now(), name: 'สำนักงานใหญ่', lat: docSnap.data().officeLat, lng: docSnap.data().officeLng, radius: docSnap.data().radius || 100 }];
                     }
@@ -516,7 +544,18 @@
                     loadSystemSettings().then(() => { loadAdminData(); populateSettingsForm(); });
                 } else if (viewName === 'employee') {
                     userNameSpan.innerHTML = '<i class="fa-solid fa-user mr-1"></i> ' + currentEmployee.name;
-                    loadSystemSettings().then(() => { initLocation(); loadEmployeeData(); });
+                    loadSystemSettings().then(() => { 
+                        initLocation(); 
+                        loadEmployeeData(); 
+                        
+                        // แสดงประกาศบริษัท
+                        if (systemSettings.announcement) {
+                            document.getElementById('emp-announcement-box').classList.remove('hide');
+                            document.getElementById('emp-announcement-text').textContent = systemSettings.announcement;
+                        } else {
+                            document.getElementById('emp-announcement-box').classList.add('hide');
+                        }
+                    });
                 }
             }
         }
@@ -702,8 +741,29 @@
                 const now = new Date();
                 const currYear = now.getFullYear();
                 const currMonth = now.getMonth();
+                const todayStrTh = now.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' });
+                
                 document.getElementById('emp-month-label').textContent = now.toLocaleDateString('th-TH', { month: 'short', year: 'numeric' });
 
+                // เช็คสถานะปัจจุบันของวันนี้
+                const todayLogs = logs.filter(l => {
+                    if(!l.timestamp) return false;
+                    return l.timestamp.toDate().toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' }) === todayStrTh;
+                });
+
+                const statusEl = document.getElementById('emp-current-status');
+                if(todayLogs.length > 0) {
+                    const lastLog = todayLogs[0]; // array ถูก sort จากใหม่ไปเก่าแล้ว
+                    if(lastLog.type === 'in') {
+                        statusEl.innerHTML = '<span class="text-emerald-600">เข้างานแล้ว (กำลังทำงาน)</span>';
+                    } else {
+                        statusEl.innerHTML = '<span class="text-rose-600">ออกงานแล้ว</span>';
+                    }
+                } else {
+                    statusEl.innerHTML = '<span class="text-gray-400">ยังไม่ได้เข้างาน</span>';
+                }
+
+                // คำนวณสรุปรายเดือน
                 const monthlyLogs = logs.filter(l => {
                     if(!l.timestamp) return false;
                     const d = l.timestamp.toDate(); return d.getFullYear() === currYear && d.getMonth() === currMonth;
@@ -741,6 +801,7 @@
                 document.getElementById('emp-stat-late').innerHTML = `${lateDays}<span class="text-xs font-normal text-gray-500"> วัน</span>`;
                 document.getElementById('emp-stat-ot').innerHTML = `${totalOT.toFixed(1)}<span class="text-xs font-normal text-gray-500"> ชม.</span>`;
 
+                // แสดงรายการประวัติล่าสุด
                 const container = document.getElementById('emp-personal-history');
                 if (logs.length === 0) container.innerHTML = '<div class="text-center text-sm text-gray-400 py-4">ยังไม่มีประวัติการบันทึกเวลา</div>';
                 else {
@@ -1346,12 +1407,14 @@
         });
 
         function populateSettingsForm() {
+            document.getElementById('setting-announcement').value = systemSettings.announcement || '';
             document.getElementById('setting-workhours').value = systemSettings.workHours || 8;
             document.getElementById('setting-coretime').value = systemSettings.coreTime || '09:00';
             renderBranchesList();
         }
 
         document.getElementById('btn-save-settings').addEventListener('click', async () => {
+            const announcement = document.getElementById('setting-announcement').value.trim();
             const workHours = document.getElementById('setting-workhours').value;
             const coreTime = document.getElementById('setting-coretime').value;
             
@@ -1371,7 +1434,12 @@
 
             Swal.fire({ title: 'กำลังบันทึก...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
             try {
-                const newData = { branches: updatedBranches, workHours: workHours ? parseFloat(workHours) : 8, coreTime: coreTime || "09:00" };
+                const newData = { 
+                    announcement: announcement,
+                    branches: updatedBranches, 
+                    workHours: workHours ? parseFloat(workHours) : 8, 
+                    coreTime: coreTime || "09:00" 
+                };
                 await setDoc(doc(db, "settings", "general"), newData);
                 systemSettings = { ...systemSettings, ...newData }; 
                 renderBranchesList(); // อัปเดต UI หน้าตาเผื่อมีการลบสาขาที่ข้อมูลไม่ครบออกไป
