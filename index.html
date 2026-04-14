@@ -1264,47 +1264,6 @@ function populateSettingsForm() {
         }
     });
 });
-        document.getElementById('btn-logout').addEventListener('click', () => {
-    Swal.fire({
-        title: 'ออกจากระบบ?',
-        text: "คุณต้องการออกจากระบบใช่หรือไม่?",
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#e11d48',
-        cancelButtonColor: '#9ca3af',
-        confirmButtonText: '<i class="fa-solid fa-right-from-bracket"></i> ใช่, ออกจากระบบ',
-        cancelButtonText: 'ยกเลิก'
-    }).then(async (result) => {
-        if (result.isConfirmed) {
-            try {
-                // 1. ล็อกเอาท์ออกจาก Firebase Auth
-                await signOut(auth);
-                
-                // 2. ล้างข้อมูลที่บันทึกไว้ในเครื่อง
-                localStorage.removeItem('currentEmployeeData');
-                sessionStorage.removeItem('currentEmployeeData');
-                sessionStorage.removeItem('currentAdminData');
-                
-                // 3. รีเซ็ตตัวแปรในระบบ
-                currentEmployee = null;
-                currentAdmin = null;
-                expectedAction = 'in';
-                
-                // 4. เปลี่ยนหน้าจอไปที่หน้า Login
-                showView('login');
-                
-                Swal.fire({ 
-                    icon: 'success', 
-                    title: 'ออกจากระบบแล้ว', 
-                    timer: 1500, 
-                    showConfirmButton: false 
-                });
-            } catch (error) {
-                Swal.fire('ผิดพลาด', 'ไม่สามารถออกจากระบบได้: ' + error.message, 'error');
-            }
-        }
-    });
-});
 
         // Mandatory Firebase Auth Initializer
         const initAuth = async () => {
@@ -2163,7 +2122,223 @@ document.getElementById('search-timelog')?.addEventListener('input', renderTimel
                 } catch (error) { Swal.fire('ผิดพลาด', error.message, 'error'); }
             }
         });
+// ==========================================
+// ส่วนของการจัดการหน้าตั้งค่าระบบ (Settings)
+// ==========================================
 
+// 1. อัปเดตฟังก์ชัน populateSettingsForm ให้เรียกการวาดรายการต่างๆ ด้วย
+window.populateSettingsForm = function() {
+    if (!systemSettings) return;
+    
+    document.getElementById('setting-announcement').value = systemSettings.announcement || '';
+    document.getElementById('setting-ot-normal').value = systemSettings.otNormal || 1.5;
+    document.getElementById('setting-ot-weekend').value = systemSettings.otWeekend || 2;
+    document.getElementById('setting-ot-holiday').value = systemSettings.otHoliday || 3;
+    document.getElementById('setting-sso-percent').value = systemSettings.ssoPercent || 5;
+    document.getElementById('setting-sso-max').value = systemSettings.ssoMax || 750;
+    document.getElementById('setting-workhours').value = systemSettings.workHours || 8;
+    document.getElementById('setting-coretime').value = systemSettings.coreTime || "09:00";
+    
+    window.renderSettingsLists();
+};
+
+// 2. ฟังก์ชันวาดรายการ แผนก, กะ, สาขา, วันหยุด ลงในหน้าจอ
+window.renderSettingsLists = function() {
+    // แผนก
+    const deptsList = document.getElementById('depts-list');
+    if (deptsList) {
+        deptsList.innerHTML = (systemSettings.departments || []).map(d => `
+            <div class="flex justify-between items-center bg-gray-50 p-2.5 rounded-lg border border-gray-200">
+                <span class="text-sm font-bold text-gray-700">${d.name}</span>
+                <button type="button" onclick="window.deleteSettingItem('departments', '${d.id}')" class="text-rose-500 hover:text-rose-700 p-1 transition"><i class="fa-solid fa-trash"></i></button>
+            </div>`).join('') || '<p class="text-xs text-gray-400 text-center py-2">ยังไม่มีข้อมูล</p>';
+    }
+
+    // กะการทำงาน
+    const shiftsList = document.getElementById('shifts-list');
+    if (shiftsList) {
+        shiftsList.innerHTML = (systemSettings.shifts || []).map(s => `
+            <div class="flex justify-between items-center bg-gray-50 p-2.5 rounded-lg border border-gray-200">
+                <div>
+                    <span class="text-sm font-bold text-gray-700">${s.name}</span>
+                    <p class="text-[10px] text-gray-500">เข้า: ${s.coreTime} | ${s.workHours} ชม.</p>
+                </div>
+                <button type="button" onclick="window.deleteSettingItem('shifts', '${s.id}')" class="text-rose-500 hover:text-rose-700 p-1 transition"><i class="fa-solid fa-trash"></i></button>
+            </div>`).join('') || '<p class="text-xs text-gray-400 text-center py-2">ยังไม่มีข้อมูล</p>';
+    }
+
+    // สาขา (พิกัด)
+    const branchesList = document.getElementById('branches-list');
+    if (branchesList) {
+        branchesList.innerHTML = (systemSettings.branches || []).map(b => `
+            <div class="flex justify-between items-center bg-gray-50 p-3 rounded-xl border border-gray-200">
+                <div>
+                    <span class="text-sm font-bold text-indigo-700"><i class="fa-solid fa-location-dot mr-1"></i>${b.name}</span>
+                    <p class="text-xs text-gray-500 mt-1">Lat: ${b.lat}, Lng: ${b.lng} (รัศมี ${b.radius}ม.)</p>
+                </div>
+                <button type="button" onclick="window.deleteSettingItem('branches', '${b.id}')" class="text-rose-500 hover:text-rose-700 p-2 bg-white rounded shadow-sm transition"><i class="fa-solid fa-trash"></i></button>
+            </div>`).join('') || '<p class="text-sm text-gray-400 text-center py-4 bg-gray-50 rounded-lg border border-dashed border-gray-300">ไม่จำกัดพิกัด (เข้างานได้ทุกที่)</p>';
+    }
+
+    // วันหยุดบริษัท
+    const holidaysList = document.getElementById('holidays-list');
+    if (holidaysList) {
+        holidaysList.innerHTML = (systemSettings.holidays || []).map(h => {
+            const parts = h.date.split('-');
+            const thDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
+            return `<div class="flex justify-between items-center bg-rose-50 p-2.5 rounded-lg border border-rose-100">
+                <div>
+                    <span class="text-sm font-bold text-rose-700">${h.name}</span>
+                    <p class="text-[10px] text-rose-500"><i class="fa-regular fa-calendar"></i> ${thDate}</p>
+                </div>
+                <button type="button" onclick="window.deleteSettingItem('holidays', '${h.id}')" class="text-rose-500 hover:text-rose-700 p-1 transition"><i class="fa-solid fa-trash"></i></button>
+            </div>`
+        }).join('') || '<p class="text-xs text-gray-400 text-center py-2">ยังไม่มีข้อมูล</p>';
+    }
+};
+
+// 3. ฟังก์ชันลบข้อมูลออกจากรายการ
+window.deleteSettingItem = function(type, id) {
+    Swal.fire({
+        title: 'ลบรายการนี้?', 
+        icon: 'warning', 
+        showCancelButton: true, 
+        confirmButtonColor: '#e11d48', 
+        cancelButtonColor: '#9ca3af',
+        confirmButtonText: 'ลบทิ้ง',
+        cancelButtonText: 'ยกเลิก'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            systemSettings[type] = systemSettings[type].filter(item => item.id !== id);
+            window.renderSettingsLists();
+        }
+    });
+};
+
+// 4. ปุ่มเพิ่มแผนก
+document.getElementById('btn-add-dept')?.addEventListener('click', async () => {
+    const { value: name } = await Swal.fire({
+        title: 'เพิ่มแผนก', input: 'text', inputPlaceholder: 'ชื่อแผนก (เช่น ฝ่ายขาย, ไอที)', showCancelButton: true, confirmButtonText: 'เพิ่ม'
+    });
+    if (name) {
+        if(!systemSettings.departments) systemSettings.departments = [];
+        systemSettings.departments.push({ id: Date.now().toString(), name: name.trim() });
+        window.renderSettingsLists();
+    }
+});
+
+// 5. ปุ่มเพิ่มกะ
+document.getElementById('btn-add-shift')?.addEventListener('click', async () => {
+    const { value: formValues } = await Swal.fire({
+        title: 'เพิ่มกะการทำงาน',
+        html: '<div class="text-left"><label class="text-xs text-gray-500">ชื่อกะ</label><input id="swal-s-name" class="w-full p-2 border rounded mb-2" placeholder="เช่น กะเช้า"></div>' +
+              '<div class="text-left"><label class="text-xs text-gray-500">เวลาเริ่มงาน</label><input id="swal-s-time" type="time" class="w-full p-2 border rounded mb-2"></div>' +
+              '<div class="text-left"><label class="text-xs text-gray-500">ชั่วโมงทำงาน</label><input id="swal-s-hrs" type="number" step="0.5" class="w-full p-2 border rounded" placeholder="เช่น 8"></div>',
+        focusConfirm: false, showCancelButton: true, confirmButtonText: 'เพิ่ม',
+        preConfirm: () => {
+            const name = document.getElementById('swal-s-name').value;
+            const time = document.getElementById('swal-s-time').value;
+            if(!name || !time) { Swal.showValidationMessage('กรุณากรอกชื่อกะและเวลาเริ่มงาน'); return false; }
+            return { name: name.trim(), coreTime: time, workHours: parseFloat(document.getElementById('swal-s-hrs').value) || 8 }
+        }
+    });
+    if (formValues) {
+        if(!systemSettings.shifts) systemSettings.shifts = [];
+        systemSettings.shifts.push({ id: Date.now().toString(), ...formValues });
+        window.renderSettingsLists();
+    }
+});
+
+// 6. ปุ่มเพิ่มสาขา (GPS)
+document.getElementById('btn-add-branch')?.addEventListener('click', async () => {
+    const { value: formValues } = await Swal.fire({
+        title: 'เพิ่มสาขา',
+        html: '<div class="text-left"><label class="text-xs text-gray-500">ชื่อสาขา</label><input id="swal-b-name" class="w-full p-2 border rounded mb-2" placeholder="เช่น สาขาอโศก"></div>' +
+              '<div class="flex gap-2"><div class="flex-1 text-left"><label class="text-xs text-gray-500">Latitude</label><input id="swal-b-lat" type="number" step="any" class="w-full p-2 border rounded mb-2" placeholder="13.xxx"></div>' +
+              '<div class="flex-1 text-left"><label class="text-xs text-gray-500">Longitude</label><input id="swal-b-lng" type="number" step="any" class="w-full p-2 border rounded mb-2" placeholder="100.xxx"></div></div>' +
+              '<div class="text-left"><label class="text-xs text-gray-500">รัศมีที่อนุญาต (เมตร)</label><input id="swal-b-rad" type="number" class="w-full p-2 border rounded" placeholder="เช่น 100"></div>' +
+              '<p class="text-[10px] text-gray-400 mt-2">* ทริค: ค้นหาพิกัด Lat,Lng ได้จาก Google Maps</p>',
+        focusConfirm: false, showCancelButton: true, confirmButtonText: 'เพิ่ม',
+        preConfirm: () => {
+            const name = document.getElementById('swal-b-name').value;
+            const lat = document.getElementById('swal-b-lat').value;
+            const lng = document.getElementById('swal-b-lng').value;
+            if(!name || !lat || !lng) { Swal.showValidationMessage('กรุณากรอกข้อมูลให้ครบถ้วน'); return false; }
+            return { name: name.trim(), lat: parseFloat(lat), lng: parseFloat(lng), radius: parseFloat(document.getElementById('swal-b-rad').value) || 100 }
+        }
+    });
+    if (formValues) {
+        if(!systemSettings.branches) systemSettings.branches = [];
+        systemSettings.branches.push({ id: Date.now().toString(), ...formValues });
+        window.renderSettingsLists();
+    }
+});
+
+// 7. ปุ่มเพิ่มวันหยุด
+document.getElementById('btn-add-holiday')?.addEventListener('click', async () => {
+    const { value: formValues } = await Swal.fire({
+        title: 'เพิ่มวันหยุดบริษัท',
+        html: '<div class="text-left"><label class="text-xs text-gray-500">ชื่อวันหยุด</label><input id="swal-h-name" class="w-full p-2 border rounded mb-2" placeholder="เช่น วันปีใหม่"></div>' +
+              '<div class="text-left"><label class="text-xs text-gray-500">วันที่</label><input id="swal-h-date" type="date" class="w-full p-2 border rounded"></div>',
+        focusConfirm: false, showCancelButton: true, confirmButtonText: 'เพิ่ม',
+        preConfirm: () => {
+            const name = document.getElementById('swal-h-name').value;
+            const date = document.getElementById('swal-h-date').value;
+            if(!name || !date) { Swal.showValidationMessage('กรุณาระบุชื่อวันหยุดและวันที่'); return false; }
+            return { name: name.trim(), date: date }
+        }
+    });
+    if (formValues) {
+        if(!systemSettings.holidays) systemSettings.holidays = [];
+        systemSettings.holidays.push({ id: Date.now().toString(), ...formValues });
+        // เรียงวันที่จากน้อยไปมาก
+        systemSettings.holidays.sort((a,b) => new Date(a.date) - new Date(b.date));
+        window.renderSettingsLists();
+    }
+});
+
+// 8. ปุ่มบันทึกการตั้งค่าทั้งหมด (Save to Firestore)
+document.getElementById('btn-save-settings')?.addEventListener('click', async () => {
+    if (!firebaseUser) return;
+    
+    // อัปเดตค่าที่พิมพ์ในกล่อง Input ลงใน Object
+    systemSettings.announcement = document.getElementById('setting-announcement').value.trim();
+    systemSettings.otNormal = parseFloat(document.getElementById('setting-ot-normal').value) || 1.5;
+    systemSettings.otWeekend = parseFloat(document.getElementById('setting-ot-weekend').value) || 2;
+    systemSettings.otHoliday = parseFloat(document.getElementById('setting-ot-holiday').value) || 3;
+    systemSettings.ssoPercent = parseFloat(document.getElementById('setting-sso-percent').value) || 5;
+    systemSettings.ssoMax = parseFloat(document.getElementById('setting-sso-max').value) || 750;
+    systemSettings.workHours = parseFloat(document.getElementById('setting-workhours').value) || 8;
+    systemSettings.coreTime = document.getElementById('setting-coretime').value || "09:00";
+
+    // ป้องกันค่าเป็น undefined
+    if (!systemSettings.departments) systemSettings.departments = [];
+    if (!systemSettings.shifts) systemSettings.shifts = [];
+    if (!systemSettings.branches) systemSettings.branches = [];
+    if (!systemSettings.holidays) systemSettings.holidays = [];
+
+    Swal.fire({ title: 'กำลังบันทึก...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    
+    try {
+        // ใช้ setDoc เพื่อสร้างหรือทับข้อมูล Document ชื่อ 'general' ใน Collection 'settings'
+        await setDoc(getDbDoc("settings", "general"), systemSettings);
+        Swal.fire('สำเร็จ', 'บันทึกการตั้งค่าระบบเรียบร้อยแล้ว', 'success');
+        
+        // อัปเดต Dropdown แผนกและกะ ในหน้าเพิ่มพนักงานให้เป็นค่าใหม่ทันที
+        let newDeptOpts = '<option value="">ไม่ระบุแผนก</option>';
+        systemSettings.departments.forEach(d => newDeptOpts += `<option value="${d.id}">${d.name}</option>`);
+        const deptSelect = document.getElementById('new-emp-dept');
+        if(deptSelect) deptSelect.innerHTML = newDeptOpts;
+
+        let newShiftOpts = '<option value="">กะเวลามาตรฐาน</option>';
+        systemSettings.shifts.forEach(s => newShiftOpts += `<option value="${s.id}">${s.name} (${s.coreTime}, ${s.workHours}ชม.)</option>`);
+        const shiftSelect = document.getElementById('new-emp-shift');
+        if(shiftSelect) shiftSelect.innerHTML = newShiftOpts;
+        
+    } catch (error) {
+        Swal.fire('ผิดพลาด', 'ไม่สามารถบันทึกการตั้งค่าได้: ' + error.message, 'error');
+    }
+});
     </script>
 </body>
 </html>
