@@ -1,48 +1,17 @@
-<!DOCTYPE html>
-<html lang="th">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ระบบลงเวลาเข้างาน (Firebase)</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500&display=swap" rel="stylesheet">
-    <style> body { font-family: 'Prompt', sans-serif; background-color: #f8f9fa; } </style>
-</head>
-<body>
-    <div class="container mt-5">
-        <div class="row justify-content-center">
-            <div class="col-md-6 col-sm-12">
-                <div class="card shadow-sm">
-                    <div class="card-header bg-primary text-white text-center py-3">
-                        <h4 class="mb-0">🕒 บันทึกเวลาเข้า-ออกงาน</h4>
-                    </div>
-                    <div class="card-body p-4 text-center">
-                        <div class="mb-4 text-start">
-                            <label class="form-label fw-bold">กรอกชื่อพนักงาน:</label>
-                            <input type="text" id="empName" class="form-control form-control-lg" placeholder="เช่น สมชาย ใจดี">
-                        </div>
-                        
-                        <div class="d-grid gap-3">
-                            <button onclick="recordTime('เข้างาน')" class="btn btn-success btn-lg">🟢 เข้างาน</button>
-                            <button onclick="recordTime('ออกงาน')" class="btn btn-danger btn-lg">🔴 ออกงาน</button>
-                        </div>
-                        
-                        <div id="statusMessage" class="mt-4 fw-bold text-primary"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
 
-    <script type="module">
-        // 1. นำเข้าเครื่องมือจาก Firebase
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-        import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+import React, { useState, useEffect, useMemo } from 'react';
+import { 
+  Clock, LogIn, LogOut, Wallet, Calendar, CheckCircle2, 
+  AlertCircle, Users, FileSpreadsheet, Settings, Home, 
+  Plus, Trash2, ChevronRight, UserPlus, Lock, User, 
+  ShieldCheck, ArrowLeft, KeyRound
+} from 'lucide-react';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { getFirestore, collection, addDoc, onSnapshot, doc, deleteDoc, setDoc, getDoc } from 'firebase/firestore';
 
-        // ---------------------------------------------------------
-        // 🚨 สำคัญมาก: ลบข้อมูลข้างล่างนี้ แล้วเอา firebaseConfig ของคุณมาวางทับ!
-        // ---------------------------------------------------------
-        const firebaseConfig = {
+// --- Firebase Initialization ---
+const firebaseConfig = {
   apiKey: "AIzaSyAgTWrI1G1t3GYVz4-SPM7btrsixSe0el8",
   authDomain: "time-tracker-46283.firebaseapp.com",
   projectId: "time-tracker-46283",
@@ -51,46 +20,763 @@
   appId: "1:882533547295:web:4b78bfc84322c58a50042a",
   measurementId: "G-5DPBNCSWFW"
 };
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
-        // 2. ปลุกประตูลับเชื่อมต่อ Firebase
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
+// --- Constants ---
+const PAYDAYS = [1, 7, 15, 23];
+const ADMIN_PIN = '1234'; // รหัสผ่านสำหรับเจ้าของร้าน
+const COLOR_PALETTES = [
+  { color: 'bg-blue-500', lightColor: 'bg-blue-50', textColor: 'text-blue-600' },
+  { color: 'bg-rose-500', lightColor: 'bg-rose-50', textColor: 'text-rose-600' },
+  { color: 'bg-emerald-500', lightColor: 'bg-emerald-50', textColor: 'text-emerald-600' },
+  { color: 'bg-amber-500', lightColor: 'bg-amber-50', textColor: 'text-amber-600' },
+  { color: 'bg-purple-500', lightColor: 'bg-purple-50', textColor: 'text-purple-600' }
+];
 
-        // 3. ฟังก์ชันบันทึกข้อมูล
-        window.recordTime = async function(actionType) {
-            const nameInput = document.getElementById('empName').value;
-            const messageBox = document.getElementById('statusMessage');
-            
-            if(nameInput === "") {
-                alert("กรุณากรอกชื่อก่อนกดปุ่มครับ!");
-                return;
-            }
+export default function App() {
+  // Auth & Profile State
+  const [user, setUser] = useState(null);
+  const [role, setRole] = useState('loading'); 
+  const [myEmpId, setMyEmpId] = useState(null); 
+  
+  // Data State
+  const [logs, setLogs] = useState([]);
+  const [employees, setEmployees] = useState([]);
+  const [loadingData, setLoadingData] = useState(true);
+  
+  // App State (Admin)
+  const [activeTab, setActiveTab] = useState('home');
+  const [selectedEmpId, setSelectedEmpId] = useState(null); 
+  const [currentTime, setCurrentTime] = useState(new Date());
 
-            // เปลี่ยนข้อความเป็นกำลังโหลด
-            messageBox.innerHTML = "กำลังบันทึกข้อมูล... ⏳";
-            messageBox.className = "mt-4 fw-bold text-warning";
+  // Login UI State
+  const [loginMode, setLoginMode] = useState('select'); // 'select', 'admin_pin', 'select_emp', 'emp_pin'
+  const [selectedLoginEmp, setSelectedLoginEmp] = useState(null);
+  const [pinInput, setPinInput] = useState('');
+  const [pinError, setPinError] = useState('');
 
-            try {
-                // คำสั่งส่งข้อมูลไปเก็บในคอลเลกชัน (ตาราง) ที่ชื่อว่า 'attendance_records'
-                await addDoc(collection(db, "attendance_records"), {
-                    emp_name: nameInput,
-                    action: actionType,
-                    record_time: new Date().toLocaleString('th-TH'), // เวลาแบบตัวหนังสือ
-                    timestamp: serverTimestamp() // เวลาเป๊ะๆ ของเซิร์ฟเวอร์ Google
-                });
+  // Admin Form State
+  const [newEmpName, setNewEmpName] = useState('');
+  const [newEmpRate, setNewEmpRate] = useState('');
+  const [newEmpType, setNewEmpType] = useState('hourly');
+  const [newEmpPin, setNewEmpPin] = useState(''); // เก็บ PIN พนักงานใหม่
 
-                // แจ้งเตือนเมื่อสำเร็จ
-                messageBox.innerHTML = `✅ บันทึกเวลา ${actionType} สำเร็จ!<br>พนักงาน: ${nameInput}`;
-                messageBox.className = "mt-4 fw-bold text-success";
-                document.getElementById('empName').value = ""; // ล้างช่องกรอกชื่อ
+  // Custom Modal State
+  const [modalConfig, setModalConfig] = useState(null);
 
-            } catch (error) {
-                // แจ้งเตือนถ้ามี Error
-                console.error("Error adding document: ", error);
-                messageBox.innerHTML = "❌ เกิดข้อผิดพลาด ไม่สามารถบันทึกได้";
-                messageBox.className = "mt-4 fw-bold text-danger";
-            }
+  // PWA Meta Tags
+  useEffect(() => {
+    const metaTags = [
+      { name: 'apple-mobile-web-app-capable', content: 'yes' },
+      { name: 'apple-mobile-web-app-status-bar-style', content: 'default' },
+      { name: 'theme-color', content: '#f9fafb' }
+    ];
+    metaTags.forEach(tagInfo => {
+      let tag = document.querySelector(`meta[name="${tagInfo.name}"]`);
+      if (!tag) {
+        tag = document.createElement('meta');
+        tag.name = tagInfo.name;
+        document.head.appendChild(tag);
+      }
+      tag.content = tagInfo.content;
+    });
+  }, []);
+
+  // Clock
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Firebase Auth & Profile Initialization
+  useEffect(() => {
+    const initAuth = async () => {
+      try {
+        await signInAnonymously(auth);
+      } catch (error) {
+        console.error("Auth Error:", error);
+      }
+    };
+    initAuth();
+
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setUser(currentUser);
+      if (currentUser) {
+        try {
+          const profileRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'profile', 'data');
+          const profileSnap = await getDoc(profileRef);
+          if (profileSnap.exists()) {
+            const data = profileSnap.data();
+            setRole(data.role);
+            if (data.empId) setMyEmpId(data.empId);
+          } else {
+            setRole('none');
+          }
+        } catch (error) {
+          console.error("Profile Error:", error);
+          setRole('none');
         }
-    </script>
-</body>
-</html>
+      } else {
+        setRole('none');
+        setLoadingData(false);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Fetch Public Data
+  useEffect(() => {
+    if (!user) return;
+
+    const logsUnsub = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'time_logs'), 
+      (snapshot) => {
+        setLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      },
+      (err) => console.error(err)
+    );
+
+    const empUnsub = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'employees'), 
+      (snapshot) => {
+        const emps = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setEmployees(emps);
+        if (emps.length > 0 && !selectedEmpId) {
+          setSelectedEmpId(emps[0].id);
+        }
+        setLoadingData(false);
+      },
+      (err) => {
+        console.error(err);
+        setLoadingData(false);
+      }
+    );
+
+    return () => { logsUnsub(); empUnsub(); };
+  }, [user]);
+
+  // --- Auth Actions ---
+
+  const handleAdminLogin = async (e) => {
+    e.preventDefault();
+    if (pinInput === ADMIN_PIN) {
+      await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'data'), { role: 'admin' });
+      setRole('admin');
+      setPinError('');
+      setPinInput('');
+    } else {
+      setPinError('รหัส PIN ไม่ถูกต้อง');
+      setPinInput('');
+    }
+  };
+
+  const handleEmployeeLoginSubmit = async (e) => {
+    e.preventDefault();
+    // ถ้าพนักงานเก่าไม่มี PIN ให้ถือว่าเป็น '0000'
+    const expectedPin = selectedLoginEmp.pin || '0000';
+    if (pinInput === expectedPin) {
+      await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'data'), { role: 'employee', empId: selectedLoginEmp.id });
+      setMyEmpId(selectedLoginEmp.id);
+      setRole('employee');
+      setPinError('');
+      setPinInput('');
+      setSelectedLoginEmp(null);
+    } else {
+      setPinError('รหัส PIN ไม่ถูกต้อง');
+      setPinInput('');
+    }
+  };
+
+  const handleLogout = () => {
+    setModalConfig({
+      message: 'คุณต้องการออกจากระบบเพื่อสลับบัญชีใช่หรือไม่?',
+      onConfirm: async () => {
+        await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'data'));
+        setRole('none');
+        setMyEmpId(null);
+        setLoginMode('select');
+      }
+    });
+  };
+
+  // --- App Actions ---
+
+  const handleClock = async (type, targetEmpId) => {
+    if (!user || !targetEmpId) return;
+    const newLog = { employeeId: targetEmpId, type, timestamp: Date.now() };
+    try {
+      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'time_logs'), newLog);
+    } catch (error) {
+      console.error("Error adding log:", error);
+    }
+  };
+
+  const handleAddEmployee = async (e) => {
+    e.preventDefault();
+    if (!user || !newEmpName.trim() || !newEmpRate || !newEmpPin.trim()) return;
+    
+    const colorIndex = employees.length % COLOR_PALETTES.length;
+    const newEmp = {
+      name: newEmpName.trim(),
+      rate: Number(newEmpRate),
+      rateType: newEmpType,
+      pin: newEmpPin.trim(),
+      ...COLOR_PALETTES[colorIndex]
+    };
+
+    try {
+      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'employees'), newEmp);
+      setNewEmpName('');
+      setNewEmpRate('');
+      setNewEmpPin('');
+    } catch (error) {
+      console.error("Error adding employee:", error);
+    }
+  };
+
+  const handleDeleteEmployee = (id) => {
+    setModalConfig({
+      message: 'คุณต้องการลบพนักงานคนนี้ใช่หรือไม่? ข้อมูลการลงเวลาจะยังคงอยู่แต่จะไม่สามารถคำนวณได้',
+      onConfirm: async () => {
+        try {
+          await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'employees', id));
+        } catch (error) {
+          console.error(error);
+        }
+      }
+    });
+  };
+
+  const exportCSV = () => {
+    let csv = "\uFEFFพนักงาน,ประเภท,วันที่,เวลา\n"; 
+    const sortedLogs = [...logs].sort((a, b) => b.timestamp - a.timestamp);
+    
+    sortedLogs.forEach(log => {
+      const empName = employees.find(e => e.id === log.employeeId)?.name || 'ไม่ทราบชื่อ';
+      const d = new Date(log.timestamp);
+      csv += `${empName},${log.type === 'in' ? 'เข้างาน' : 'เลิกงาน'},${d.toLocaleDateString('th-TH')},${d.toLocaleTimeString('th-TH')}\n`;
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `time_logs_${new Date().toLocaleDateString('en-GB').replace(/\//g,'-')}.csv`;
+    link.click();
+  };
+
+  // --- Calculations ---
+
+  const getEmpStatus = (empId) => {
+    const empLogs = logs.filter(log => log.employeeId === empId).sort((a, b) => b.timestamp - a.timestamp);
+    const today = new Date().setHours(0,0,0,0);
+    const latestLog = empLogs[0];
+    if (latestLog && new Date(latestLog.timestamp).setHours(0,0,0,0) === today) return latestLog.type;
+    return 'out';
+  };
+
+  const periodInfo = useMemo(() => {
+    const d = currentTime.getDate();
+    let startD, endD, nextPayday;
+    if (d >= 23 || d < 1) { startD = 23; endD = 31; nextPayday = 1; }
+    else if (d >= 15) { startD = 15; endD = 22; nextPayday = 23; }
+    else if (d >= 7) { startD = 7; endD = 14; nextPayday = 15; }
+    else { startD = 1; endD = 6; nextPayday = 7; }
+
+    const isPayday = PAYDAYS.includes(d);
+    let daysUntil = 0;
+    if (!isPayday) {
+      if (nextPayday === 1 && d >= 23) {
+        const nextMonth = new Date(currentTime.getFullYear(), currentTime.getMonth() + 1, 1);
+        daysUntil = Math.ceil(Math.abs(nextMonth - currentTime) / (1000 * 60 * 60 * 24));
+      } else {
+        daysUntil = nextPayday - d;
+      }
+    }
+    return { startD, endD, nextPayday, isPayday, daysUntil };
+  }, [currentTime]);
+
+  const salaryCalculations = useMemo(() => {
+    const now = currentTime;
+    let periodStart = new Date(now.getFullYear(), now.getMonth(), periodInfo.startD);
+    let periodEnd = new Date(now.getFullYear(), now.getMonth(), periodInfo.endD, 23, 59, 59);
+    
+    if (periodInfo.startD === 23 && now.getDate() < 23) {
+        periodStart = new Date(now.getFullYear(), now.getMonth() - 1, 23);
+    } else if (periodInfo.startD === 23) {
+        periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+    }
+
+    const results = employees.map(emp => {
+      const empLogs = logs
+        .filter(l => l.employeeId === emp.id && l.timestamp >= periodStart.getTime() && l.timestamp <= periodEnd.getTime())
+        .sort((a, b) => a.timestamp - b.timestamp);
+
+      let totalHours = 0;
+      let workedDays = new Set();
+      let activeIn = null;
+
+      empLogs.forEach(log => {
+        if (log.type === 'in') {
+          activeIn = log;
+          workedDays.add(new Date(log.timestamp).toLocaleDateString());
+        } else if (log.type === 'out' && activeIn) {
+          totalHours += (log.timestamp - activeIn.timestamp) / (1000 * 60 * 60);
+          activeIn = null;
+        }
+      });
+
+      const totalDays = workedDays.size;
+      const amount = emp.rateType === 'hourly' ? totalHours * emp.rate : totalDays * emp.rate;
+
+      return { ...emp, totalHours: totalHours.toFixed(1), totalDays, amount: amount.toFixed(0) };
+    });
+
+    return { periodStart, periodEnd, results };
+  }, [employees, logs, currentTime, periodInfo]);
+
+  // Initial Data Seeding
+  const seedDefaultEmployees = async () => {
+    if (!user) return;
+    try {
+      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'employees'), { name: 'จันทรา', rate: 50, rateType: 'hourly', pin: '1111', ...COLOR_PALETTES[0] });
+      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'employees'), { name: 'พันวษา', rate: 50, rateType: 'hourly', pin: '2222', ...COLOR_PALETTES[1] });
+    } catch(e) { console.error(e) }
+  };
+
+  // === UI Renders ===
+
+  if (role === 'loading' || loadingData) {
+    return <div className="flex h-screen items-center justify-center bg-gray-50 text-gray-400">กำลังโหลด...</div>;
+  }
+
+  // --- LOGIN SCREEN ---
+  if (role === 'none') {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6 font-sans sm:max-w-md sm:mx-auto sm:border-x sm:shadow-2xl">
+        <div className="w-full bg-white p-8 rounded-3xl shadow-xl border border-gray-100">
+          
+          <div className="flex justify-center mb-6">
+            <div className="bg-blue-100 p-4 rounded-full text-blue-600">
+              <ShieldCheck size={48} />
+            </div>
+          </div>
+          <h1 className="text-2xl font-bold text-center text-gray-800 mb-2">เข้าสู่ระบบ</h1>
+          <p className="text-center text-gray-500 mb-8 text-sm">เลือกระบุตัวตนเพื่อเข้าใช้งานระบบลงเวลา</p>
+
+          {loginMode === 'select' && (
+            <div className="space-y-4">
+              <button onClick={() => setLoginMode('select_emp')} className="w-full flex items-center justify-between bg-gray-50 hover:bg-gray-100 p-4 rounded-2xl transition border border-gray-100">
+                <div className="flex items-center">
+                  <User className="text-blue-500 mr-3" size={24} />
+                  <span className="font-bold text-gray-800">พนักงานร้าน</span>
+                </div>
+                <ChevronRight className="text-gray-400" size={20} />
+              </button>
+              <button onClick={() => setLoginMode('admin_pin')} className="w-full flex items-center justify-between bg-gray-900 hover:bg-gray-800 p-4 rounded-2xl transition shadow-md">
+                <div className="flex items-center">
+                  <Lock className="text-white mr-3" size={24} />
+                  <span className="font-bold text-white">เจ้าของร้าน / แอดมิน</span>
+                </div>
+                <ChevronRight className="text-gray-400" size={20} />
+              </button>
+            </div>
+          )}
+
+          {/* เลือกชื่อพนักงาน */}
+          {loginMode === 'select_emp' && (
+            <div className="animate-in fade-in slide-in-from-right-4">
+              <button onClick={() => setLoginMode('select')} className="text-sm text-gray-500 flex items-center mb-6 hover:text-gray-800">
+                <ArrowLeft size={16} className="mr-1"/> กลับ
+              </button>
+              <h3 className="font-bold text-gray-800 mb-4">คุณคือใคร?</h3>
+              {employees.length === 0 ? (
+                <div className="text-center text-gray-400 py-4 text-sm">ยังไม่มีข้อมูลพนักงาน กรุณาให้เจ้าของร้านเพิ่มพนักงานก่อน</div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  {employees.map(emp => (
+                    <button key={emp.id} onClick={() => {
+                        setSelectedLoginEmp(emp);
+                        setLoginMode('emp_pin');
+                        setPinInput('');
+                        setPinError('');
+                    }} className={`p-4 rounded-2xl border ${emp.lightColor} border-transparent hover:border-blue-200 transition text-center`}>
+                      <span className={`font-bold ${emp.textColor}`}>{emp.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ใส่ PIN พนักงาน */}
+          {loginMode === 'emp_pin' && selectedLoginEmp && (
+            <form onSubmit={handleEmployeeLoginSubmit} className="animate-in fade-in slide-in-from-right-4">
+              <button type="button" onClick={() => setLoginMode('select_emp')} className="text-sm text-gray-500 flex items-center mb-6 hover:text-gray-800">
+                <ArrowLeft size={16} className="mr-1"/> กลับไปเลือกชื่อ
+              </button>
+              <h3 className="font-bold text-gray-800 mb-2">รหัส PIN ของ {selectedLoginEmp.name}</h3>
+              <p className="text-xs text-gray-500 mb-4">กรุณากรอกรหัสผ่านประจำตัว 4 หลัก</p>
+              <input
+                type="password" pattern="[0-9]*" inputMode="numeric" maxLength="4"
+                value={pinInput} onChange={e => setPinInput(e.target.value)}
+                placeholder="****"
+                className="w-full text-center text-3xl tracking-[1em] p-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 mb-2 outline-none font-mono"
+                autoFocus
+              />
+              {pinError && <p className="text-red-500 text-sm text-center mb-4">{pinError}</p>}
+              <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold p-4 rounded-xl mt-4 transition">ยืนยันตัวตน</button>
+            </form>
+          )}
+
+          {/* ใส่ PIN เจ้าของร้าน */}
+          {loginMode === 'admin_pin' && (
+            <form onSubmit={handleAdminLogin} className="animate-in fade-in slide-in-from-right-4">
+              <button type="button" onClick={() => setLoginMode('select')} className="text-sm text-gray-500 flex items-center mb-6 hover:text-gray-800">
+                <ArrowLeft size={16} className="mr-1"/> กลับ
+              </button>
+              <h3 className="font-bold text-gray-800 mb-2">รหัสผ่านเจ้าของร้าน</h3>
+              <p className="text-xs text-gray-500 mb-4">(รหัสเริ่มต้นคือ: {ADMIN_PIN})</p>
+              <input
+                type="password" pattern="[0-9]*" inputMode="numeric"
+                value={pinInput} onChange={e => setPinInput(e.target.value)}
+                placeholder="กรอกรหัส PIN"
+                className="w-full text-center text-2xl tracking-widest p-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 mb-2 outline-none"
+                autoFocus
+              />
+              {pinError && <p className="text-red-500 text-sm text-center mb-4">{pinError}</p>}
+              <button type="submit" className="w-full bg-gray-900 text-white font-bold p-4 rounded-xl mt-4">เข้าสู่ระบบ</button>
+            </form>
+          )}
+
+        </div>
+      </div>
+    );
+  }
+
+  // --- MAIN APP COMPONENT (Time Tracking Area) ---
+  const TimeTrackingUI = ({ isEmployeeRole }) => {
+    const targetEmpId = isEmployeeRole ? myEmpId : selectedEmpId;
+    const targetEmp = employees.find(e => e.id === targetEmpId);
+    const targetStatus = getEmpStatus(targetEmpId);
+    
+    const targetLogs = logs
+      .filter(log => log.employeeId === targetEmpId)
+      .sort((a, b) => b.timestamp - a.timestamp);
+
+    return (
+      <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
+        <header className="bg-white px-6 pt-12 pb-6 rounded-b-3xl shadow-sm z-10 relative">
+          <div className="flex justify-between items-center mb-4">
+            <h1 className="text-2xl font-bold tracking-tight text-gray-800">
+              {isEmployeeRole ? `สวัสดี, ${targetEmp?.name || ''}` : 'ลงเวลาทำงาน'}
+            </h1>
+            <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-1 text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full text-sm font-medium">
+                <Clock size={16} />
+                <span>{currentTime.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}</span>
+              </div>
+              <button onClick={handleLogout} className="p-1.5 text-gray-400 hover:text-red-500 bg-gray-50 rounded-full" title="ออกจากระบบ">
+                <LogOut size={18} />
+              </button>
+            </div>
+          </div>
+          <div className="text-gray-500 text-sm font-medium">
+            {currentTime.toLocaleDateString('th-TH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+          </div>
+        </header>
+
+        <main className="px-6 py-6 space-y-6">
+          {!isEmployeeRole && (
+            periodInfo.isPayday ? (
+              <div className="bg-emerald-500 text-white p-4 rounded-2xl shadow-lg flex items-start space-x-4 animate-pulse">
+                <div className="bg-white/20 p-2 rounded-xl"><Wallet size={24} /></div>
+                <div>
+                  <h3 className="font-bold text-lg">วันนี้วันเงินเดือนออก! 🎉</h3>
+                  <p className="text-emerald-50 text-sm">ตรวจสอบยอดและโอนเงินให้พนักงาน</p>
+                </div>
+              </div>
+            ) : periodInfo.daysUntil <= 2 && (
+              <div className="bg-orange-50 border border-orange-100 p-4 rounded-2xl flex items-start space-x-4">
+                <div className="bg-orange-100 p-2 rounded-xl text-orange-600"><AlertCircle size={24} /></div>
+                <div>
+                  <h3 className="font-bold text-orange-800">ใกล้ถึงวันจ่ายเงินเดือน</h3>
+                  <p className="text-orange-600 text-sm">อีก {periodInfo.daysUntil} วัน (วันที่ {periodInfo.nextPayday})</p>
+                </div>
+              </div>
+            )
+          )}
+
+          {employees.length === 0 ? (
+            !isEmployeeRole && (
+              <div className="bg-blue-50 border border-blue-100 p-6 rounded-2xl text-center">
+                <Users className="mx-auto text-blue-300 mb-3" size={40} />
+                <p className="text-blue-800 font-medium mb-4">ยังไม่มีข้อมูลพนักงานในระบบ</p>
+                <button onClick={seedDefaultEmployees} className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-blue-700 w-full">
+                  + เพิ่มข้อมูลทดสอบ (จันทรา และ พันวษา)
+                </button>
+              </div>
+            )
+          ) : (
+            <>
+              {!isEmployeeRole && (
+                <div className="flex overflow-x-auto space-x-2 pb-2 scrollbar-hide">
+                  {employees.map((emp) => (
+                    <button
+                      key={emp.id}
+                      onClick={() => setSelectedEmpId(emp.id)}
+                      className={`flex-none px-5 py-3 text-sm font-bold rounded-xl transition-all duration-300 whitespace-nowrap
+                        ${selectedEmpId === emp.id ? `${emp.color} text-white shadow-md` : 'bg-white text-gray-500 border border-gray-200'}`}
+                    >
+                      {emp.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {targetEmp && (
+                <div className="pt-4 pb-2 flex flex-col items-center">
+                  <div className={`w-56 h-56 rounded-full flex items-center justify-center p-3 mb-6 transition-all duration-500 ${targetEmp.lightColor}`}>
+                    <button
+                      onClick={() => handleClock(targetStatus === 'out' ? 'in' : 'out', targetEmpId)}
+                      className={`w-full h-full rounded-full flex flex-col items-center justify-center space-y-2 text-white shadow-xl transition-transform active:scale-95 ${targetEmp.color}`}
+                    >
+                      {targetStatus === 'out' ? (
+                        <><LogIn size={48} /><span className="text-3xl font-bold">เข้างาน</span></>
+                      ) : (
+                        <><LogOut size={48} /><span className="text-3xl font-bold">เลิกงาน</span></>
+                      )}
+                    </button>
+                  </div>
+                  
+                  <div className="bg-white px-5 py-2.5 rounded-full shadow-sm border border-gray-100 flex items-center space-x-2">
+                    <span className="text-gray-500 text-sm">สถานะ:</span>
+                    <span className={`font-bold text-sm flex items-center ${targetStatus === 'in' ? 'text-emerald-600' : 'text-gray-400'}`}>
+                      {targetStatus === 'in' ? <><CheckCircle2 size={16} className="mr-1"/> ทำงานอยู่</> : 'พัก/เลิกงาน'}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-8">
+                <h3 className="font-bold text-gray-800 mb-4 flex items-center">
+                  <Calendar size={18} className="mr-2 text-gray-400" />
+                  ประวัติล่าสุด {isEmployeeRole ? '' : `(${targetEmp?.name})`}
+                </h3>
+                
+                <div className="space-y-3">
+                  {targetLogs.length === 0 ? (
+                    <div className="text-center py-6 text-gray-400 bg-white rounded-2xl border border-gray-50">ไม่มีข้อมูลการลงเวลา</div>
+                  ) : (
+                    targetLogs.slice(0, 7).map((log) => {
+                      const logDate = new Date(log.timestamp);
+                      const isToday = logDate.setHours(0,0,0,0) === new Date().setHours(0,0,0,0);
+                      return (
+                        <div key={log.id} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-50 flex items-center justify-between">
+                          <div className="flex items-center space-x-4">
+                            <div className={`p-3 rounded-full ${log.type === 'in' ? 'bg-emerald-50 text-emerald-600' : 'bg-orange-50 text-orange-600'}`}>
+                              {log.type === 'in' ? <LogIn size={20} /> : <LogOut size={20} />}
+                            </div>
+                            <div>
+                              <p className="font-bold text-gray-800">{log.type === 'in' ? 'เข้างาน' : 'เลิกงาน'}</p>
+                              <p className="text-xs text-gray-400">
+                                {isToday ? 'วันนี้' : new Date(log.timestamp).toLocaleDateString('th-TH', { month: 'short', day: 'numeric' })}
+                              </p>
+                            </div>
+                          </div>
+                          <span className="font-mono font-medium text-gray-700">
+                            {new Date(log.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </main>
+      </div>
+    );
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 text-gray-900 font-sans sm:max-w-md sm:mx-auto sm:border-x sm:shadow-2xl relative flex flex-col">
+      
+      <div className="flex-1 overflow-y-auto pb-24">
+        
+        {role === 'employee' && <TimeTrackingUI isEmployeeRole={true} />}
+        {role === 'admin' && activeTab === 'home' && <TimeTrackingUI isEmployeeRole={false} />}
+
+        {role === 'admin' && activeTab === 'admin' && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
+            <header className="bg-gray-900 text-white px-6 pt-12 pb-6 rounded-b-3xl shadow-md relative">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h1 className="text-2xl font-bold tracking-tight mb-2">สรุป & จัดการ</h1>
+                  <p className="text-gray-400 text-sm">เงินเดือนและข้อมูลพนักงาน</p>
+                </div>
+                <button onClick={handleLogout} className="p-2 text-gray-400 hover:text-white bg-gray-800 rounded-full" title="ออกจากระบบ">
+                  <LogOut size={18} />
+                </button>
+              </div>
+            </header>
+
+            <main className="px-6 py-6 space-y-8">
+              
+              <section>
+                <div className="flex justify-between items-end mb-4">
+                  <div>
+                    <h2 className="font-bold text-gray-800 text-lg flex items-center">
+                      <Wallet size={20} className="mr-2 text-indigo-500" />
+                      สรุปยอดรอบปัจจุบัน
+                    </h2>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {salaryCalculations.periodStart.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })} - 
+                      {salaryCalculations.periodEnd.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })}
+                    </p>
+                  </div>
+                  <button onClick={exportCSV} className="text-xs font-medium bg-emerald-50 text-emerald-700 px-3 py-2 rounded-lg flex items-center shadow-sm">
+                    <FileSpreadsheet size={14} className="mr-1" /> โหลด CSV
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  {salaryCalculations.results.map(result => (
+                    <div key={result.id} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className={`font-bold ${result.textColor}`}>{result.name}</span>
+                        <span className="font-bold text-gray-800">฿{Number(result.amount).toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between text-xs text-gray-500">
+                        <span>เรท: {result.rate}บ./{result.rateType === 'hourly' ? 'ชม.' : 'วัน'}</span>
+                        <span>
+                          {result.rateType === 'hourly' ? `${result.totalHours} ชม. (${result.totalDays} วัน)` : `${result.totalDays} วัน`}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                  {salaryCalculations.results.length === 0 && (
+                    <p className="text-center text-sm text-gray-400 py-4 bg-gray-50 rounded-xl">ไม่มีข้อมูลพนักงาน</p>
+                  )}
+                </div>
+              </section>
+
+              <hr className="border-gray-200" />
+
+              <section>
+                <h2 className="font-bold text-gray-800 text-lg flex items-center mb-4">
+                  <Users size={20} className="mr-2 text-blue-500" /> จัดการพนักงาน
+                </h2>
+
+                <div className="space-y-3 mb-6">
+                  {employees.map(emp => (
+                    <div key={emp.id} className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs ${emp.color}`}>
+                          {emp.name.charAt(0)}
+                        </div>
+                        <div>
+                          <p className="font-bold text-sm text-gray-800">{emp.name}</p>
+                          <div className="flex items-center text-xs text-gray-500 space-x-2 mt-0.5">
+                            <span>{emp.rate}บ./{emp.rateType === 'hourly' ? 'ชั่วโมง' : 'วัน'}</span>
+                            <span className="text-gray-300">|</span>
+                            <span className="flex items-center"><KeyRound size={12} className="mr-1"/> PIN: {emp.pin || '0000'}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <button onClick={() => handleDeleteEmployee(emp.id)} className="p-2 text-red-400 hover:bg-red-50 rounded-lg transition">
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                <form onSubmit={handleAddEmployee} className="bg-gray-100/50 p-4 rounded-2xl border border-gray-200 border-dashed">
+                  <h3 className="text-sm font-bold text-gray-700 mb-3 flex items-center"><UserPlus size={16} className="mr-2" /> เพิ่มพนักงานใหม่</h3>
+                  <div className="space-y-3">
+                    <input 
+                      type="text" placeholder="ชื่อพนักงาน" value={newEmpName} onChange={e => setNewEmpName(e.target.value)}
+                      className="w-full px-4 py-2.5 rounded-xl border-none focus:ring-2 focus:ring-blue-500 shadow-sm text-sm" required 
+                    />
+                    <div className="flex space-x-2">
+                      <input 
+                        type="number" placeholder="ค่าจ้าง" value={newEmpRate} onChange={e => setNewEmpRate(e.target.value)}
+                        className="w-1/2 px-4 py-2.5 rounded-xl border-none focus:ring-2 focus:ring-blue-500 shadow-sm text-sm" required min="1"
+                      />
+                      <select 
+                        value={newEmpType} onChange={e => setNewEmpType(e.target.value)}
+                        className="w-1/2 px-4 py-2.5 rounded-xl border-none focus:ring-2 focus:ring-blue-500 shadow-sm text-sm text-gray-700"
+                      >
+                        <option value="hourly">ต่อชั่วโมง</option>
+                        <option value="daily">ต่อวัน</option>
+                      </select>
+                    </div>
+                    <input 
+                      type="text" pattern="[0-9]*" inputMode="numeric" maxLength="4" 
+                      placeholder="ตั้งรหัส PIN 4 หลัก" value={newEmpPin} onChange={e => setNewEmpPin(e.target.value)}
+                      className="w-full px-4 py-2.5 rounded-xl border-none focus:ring-2 focus:ring-blue-500 shadow-sm text-sm" required 
+                    />
+                    <button type="submit" className="w-full bg-gray-900 text-white font-medium py-2.5 rounded-xl shadow-sm hover:bg-gray-800 transition">
+                      บันทึกพนักงาน
+                    </button>
+                  </div>
+                </form>
+
+              </section>
+            </main>
+          </div>
+        )}
+      </div>
+
+      {role === 'admin' && (
+        <nav className="absolute bottom-0 w-full bg-white/80 backdrop-blur-xl border-t border-gray-100 pb-safe shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.1)] z-20">
+          <div className="flex justify-around items-center px-6 py-2">
+            <button 
+              onClick={() => setActiveTab('home')}
+              className={`flex flex-col items-center p-2 transition-colors ${activeTab === 'home' ? 'text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
+            >
+              <Home size={24} className={`mb-1 ${activeTab === 'home' ? 'fill-blue-100' : ''}`} />
+              <span className="text-[10px] font-medium">ลงเวลา</span>
+            </button>
+            <button 
+              onClick={() => setActiveTab('admin')}
+              className={`flex flex-col items-center p-2 transition-colors ${activeTab === 'admin' ? 'text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
+            >
+              <Settings size={24} className={`mb-1 ${activeTab === 'admin' ? 'fill-blue-100' : ''}`} />
+              <span className="text-[10px] font-medium">จัดการ</span>
+            </button>
+          </div>
+        </nav>
+      )}
+
+      {/* Custom Confirm Modal */}
+      {modalConfig && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[100] flex items-center justify-center p-6 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl scale-in-95">
+            <div className="mb-6">
+              <div className="mx-auto w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mb-4">
+                <AlertCircle className="text-red-500" size={24} />
+              </div>
+              <h3 className="text-lg font-bold text-gray-800 text-center">{modalConfig.message}</h3>
+            </div>
+            <div className="flex space-x-3">
+              <button onClick={() => setModalConfig(null)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-800 py-3 rounded-xl font-bold transition">
+                ยกเลิก
+              </button>
+              <button onClick={() => { modalConfig.onConfirm(); setModalConfig(null); }} className="flex-1 bg-red-500 hover:bg-red-600 text-white py-3 rounded-xl font-bold transition">
+                ยืนยัน
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style>{`
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom, 20px); }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+      `}</style>
+    </div>
+  );
+}
