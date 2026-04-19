@@ -458,7 +458,82 @@
         function closeSwapModal() { document.getElementById('modal-swap-content').classList.add('translate-y-full'); setTimeout(()=>{document.getElementById('modal-swap').classList.add('hidden');},300); }
         function toggleSwapMode() { const t=document.getElementById('swap-type-select').value; if(t==='self'){document.getElementById('swap-mode-self').classList.remove('hidden'); document.getElementById('swap-mode-coworker').classList.add('hidden');}else{document.getElementById('swap-mode-self').classList.add('hidden'); document.getElementById('swap-mode-coworker').classList.remove('hidden');} }
         
-        function renderEmployeeRequestHistory() { const c=document.getElementById('emp-leave-history'), myReqs=requests.filter(l=>l.empId===currentUserId || l.targetEmpId===currentUserId).sort((a,b)=>b.timestamp-a.timestamp); if(myReqs.length===0) { c.innerHTML='<div class="text-center p-4 border-2 border-dashed bg-white rounded-xl text-gray-400">ไม่มีประวัติ</div>'; return; } c.innerHTML=myReqs.map(req=>{ let ui=req.status==='pending'?'<span class="bg-yellow-300 text-[10px] px-2 py-0.5 rounded font-bold neo-border shrink-0">รออนุมัติ</span>':req.status==='approved'?'<span class="bg-[#4ade80] text-[10px] px-2 py-0.5 rounded font-bold neo-border shrink-0">อนุมัติ</span>':'<span class="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded font-bold neo-border shrink-0">ไม่อนุมัติ</span>'; let icon='', title='', desc=''; if(req.reqType === 'leave') { icon = '<i class="fa-solid fa-calendar-minus"></i>'; title = req.type; desc = `${formatDate(req.startDate)}`; } else { icon = '<i class="fa-solid fa-rotate"></i>'; title = 'สลับวัน'; desc = 'แลกเปลี่ยนกะ'; } return `<div class="bg-white p-3 rounded-xl neo-border flex gap-3"><div class="w-8 h-8 rounded bg-gray-100 flex justify-center items-center shrink-0 border border-gray-300 text-[#111827]">${icon}</div><div class="flex-1 min-w-0"><div class="flex justify-between items-start"><h4 class="font-extrabold text-[#111827] text-sm">${title}</h4>${ui}</div><p class="text-xs text-gray-600 font-medium truncate">${desc}</p></div></div>`; }).join(''); }
+function renderEmployeeRequestHistory() { 
+    const c = document.getElementById('emp-leave-history');
+    const myReqs = requests.filter(l => l.empId === currentUserId || l.targetEmpId === currentUserId).sort((a,b) => b.timestamp - a.timestamp); 
+    
+    if(myReqs.length === 0) { 
+        c.innerHTML = '<div class="text-center p-4 border-2 border-dashed bg-white rounded-xl text-gray-400">ไม่มีประวัติ</div>'; 
+        return; 
+    } 
+    
+    c.innerHTML = myReqs.map(req => { 
+        let ui = req.status === 'pending' ? '<span class="bg-yellow-300 text-[10px] px-2 py-0.5 rounded font-bold neo-border shrink-0">รออนุมัติ</span>' : req.status === 'approved' ? '<span class="bg-[#4ade80] text-[10px] px-2 py-0.5 rounded font-bold neo-border shrink-0">อนุมัติ</span>' : '<span class="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded font-bold neo-border shrink-0">ไม่อนุมัติ</span>'; 
+        let icon = '', title = '', desc = ''; 
+        
+        if(req.reqType === 'leave') { 
+            icon = '<i class="fa-solid fa-calendar-minus"></i>'; 
+            title = req.type; 
+            desc = `${formatDate(req.startDate)}`; 
+        } else { 
+            icon = '<i class="fa-solid fa-rotate"></i>'; 
+            title = 'สลับวัน'; 
+            desc = 'แลกเปลี่ยนกะ'; 
+        } 
+        
+        // เพิ่มปุ่มลบ (แสดงเฉพาะตอนที่สถานะยังเป็น pending และเป็นคำขอของตัวเอง)
+        let cancelBtn = (req.status === 'pending' && req.empId === currentUserId) 
+            ? `<button onclick="confirmCancelRequest(${req.id})" class="ml-2 w-8 h-8 rounded-lg bg-red-100 text-red-500 flex justify-center items-center shrink-0 border-2 border-[#111827] active:scale-95 transition-transform"><i class="fa-solid fa-trash"></i></button>` 
+            : '';
+
+        return `<div class="bg-white p-3 rounded-xl neo-border flex gap-3 items-center">
+            <div class="w-8 h-8 rounded bg-gray-100 flex justify-center items-center shrink-0 border border-gray-300 text-[#111827]">${icon}</div>
+            <div class="flex-1 min-w-0">
+                <div class="flex justify-between items-start">
+                    <h4 class="font-extrabold text-[#111827] text-sm">${title}</h4>
+                    ${ui}
+                </div>
+                <p class="text-xs text-gray-600 font-medium truncate">${desc}</p>
+            </div>
+            ${cancelBtn}
+        </div>`; 
+    }).join(''); 
+}
+// ตัวแปรสำหรับเก็บ ID ของคำขอที่กำลังจะลบ
+let reqIdToCancel = null;
+
+// ฟังก์ชันเรียก Modal ยืนยันการยกเลิก
+function confirmCancelRequest(reqId) { 
+    reqIdToCancel = reqId; 
+    document.getElementById('confirm-title').innerText = "ยกเลิกคำขอ"; 
+    document.getElementById('confirm-msg').innerText = "คุณแน่ใจหรือไม่ว่าต้องการยกเลิกคำขอนี้?"; 
+    document.getElementById('confirm-icon-bg').className = "w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 border-2 border-red-500"; 
+    document.getElementById('confirm-icon').className = "fa-solid fa-trash text-3xl text-red-500"; 
+    
+    // ปรับแต่งปุ่มยืนยันให้เป็นสีแดงเข้ากับ UI
+    const actionBtn = document.getElementById('confirm-btn-action');
+    actionBtn.className = "flex-1 bg-[#f87171] text-white font-bold py-3 rounded-xl neo-border neo-shadow-sm active:scale-95"; 
+    actionBtn.innerText = "ยืนยันยกเลิก"; 
+    actionBtn.onclick = executeCancelRequest; 
+    
+    document.getElementById('modal-confirm').classList.remove('hidden'); 
+}
+
+// ฟังก์ชันที่จะลบข้อมูลจริงๆ หลังจากกดยืนยัน
+function executeCancelRequest() { 
+    if(!reqIdToCancel) return; 
+    
+    // คัดกรองเอาคำขอที่ต้องการลบออกจาก Array
+    requests = requests.filter(r => r.id !== reqIdToCancel); 
+    
+    saveData(); 
+    closeConfirmModal(); 
+    renderEmployeeRequestHistory(); 
+    showToast('ยกเลิกคำขอเรียบร้อยแล้ว'); 
+    
+    reqIdToCancel = null; 
+}
+
 
         function renderEmployeePaySlips() { const c = document.getElementById('emp-payslip-list'); const mySlips = paySlips.filter(p => p.empId === currentUserId).sort((a,b) => b.timestamp - a.timestamp); if(mySlips.length === 0) { c.innerHTML='<div class="text-center p-6 border-2 border-dashed bg-white rounded-xl text-gray-400 font-bold">ยังไม่มีสลิปเงินเดือน</div>'; return; } c.innerHTML = mySlips.map(s => `<div class="bg-white p-4 rounded-xl neo-border neo-shadow-sm flex justify-between items-center"><div class="flex items-center gap-3"><div class="w-12 h-12 bg-green-100 text-green-600 rounded-xl flex items-center justify-center neo-border shrink-0"><i class="fa-solid fa-file-invoice-dollar text-xl"></i></div><div class="min-w-0"><h4 class="font-extrabold text-[#111827] truncate">สลิปเดือน ${s.monthLabel}</h4><p class="text-xs font-bold text-gray-500">สุทธิ: <span class="text-green-600">${formatMoney(s.netPay)} ฿</span></p></div></div><button onclick="viewSlip(${s.id})" class="w-10 h-10 bg-[#111827] text-white rounded-lg flex items-center justify-center active:scale-95 shrink-0"><i class="fa-solid fa-eye"></i></button></div>`).join(''); }
 
@@ -611,7 +686,11 @@
         
         function confirmDeleteEmployee(empId, empName) { empIdToDelete = empId; document.getElementById('confirm-title').innerText = "ลบพนักงาน"; document.getElementById('confirm-msg').innerHTML = `ลบ <span class="font-bold text-red-600">${empName}</span> ออกจากระบบหรือไม่?<br><span class="text-[10px] text-gray-500">ข้อมูลที่เกี่ยวข้องจะถูกลบทิ้งทั้งหมด</span>`; document.getElementById('confirm-icon-bg').className = "w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 border-2 border-red-500"; document.getElementById('confirm-icon').className = "fa-solid fa-trash text-3xl text-red-500"; document.getElementById('confirm-btn-action').className = "flex-1 bg-[#f87171] text-white font-bold py-3 rounded-xl neo-border neo-shadow-sm active:scale-95"; document.getElementById('confirm-btn-action').innerText = "ยืนยันลบ"; document.getElementById('confirm-btn-action').onclick = executeDeleteEmployee; document.getElementById('modal-confirm').classList.remove('hidden'); }
         function executeDeleteEmployee() { if(!empIdToDelete) return; employees = employees.filter(e => e.id !== empIdToDelete); timeLogs = timeLogs.filter(l => l.empId !== empIdToDelete); requests = requests.filter(r => r.empId !== empIdToDelete && r.targetEmpId !== empIdToDelete); paySlips = paySlips.filter(p => p.empId !== empIdToDelete); saveData(); closeConfirmModal(); closeEmployeeModal(); renderOwnerEmployeeList(); renderOwnerDashboard(); updateOwnerBadge(); showToast('ลบข้อมูลเรียบร้อย'); empIdToDelete = null; }
-        function closeConfirmModal() { document.getElementById('modal-confirm').classList.add('hidden'); empIdToDelete = null; }
+function closeConfirmModal() { 
+    document.getElementById('modal-confirm').classList.add('hidden'); 
+    empIdToDelete = null; 
+    reqIdToCancel = null; 
+}
 
         let selectedReqIdForReview = null;
         function updateOwnerBadge() { const p=requests.filter(l=>l.status==='pending').length; document.getElementById('badge-pending').innerText=p; const d=document.getElementById('dot-pending-leave'); if(p>0)d.classList.remove('hidden'); else d.classList.add('hidden'); }
