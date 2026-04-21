@@ -1,498 +1,290 @@
 <!DOCTYPE html>
-<html lang="th" class="">
+<html lang="th">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="theme-color" content="#f9fafb">
-    <title>ระบบลงเวลา (Enterprise Edition)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HR Dashboard - ระบบลงเวลา</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script>tailwind.config = { darkMode: 'class' }</script>
     <style>
-        body { -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+        body { background-color: #f3f4f6; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        @keyframes radar-pulse { 0% { transform: scale(1); opacity: 0.5; } 100% { transform: scale(1.3); opacity: 0; } }
-        .animate-radar::before { content: ''; position: absolute; width: 100%; height: 100%; background-color: inherit; border-radius: 50%; z-index: -1; animation: radar-pulse 1.5s infinite ease-out; }
-        .modal-enter { animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
-        @keyframes popIn { 0% { transform: scale(0.9); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
-        /* สไตล์สำหรับจุดรหัสผ่าน (PIN) */
-        .pin-dot { width: 14px; height: 14px; border-radius: 50%; background-color: #e5e7eb; transition: all 0.2s; }
-        .pin-dot.filled { background-color: #3b82f6; transform: scale(1.2); }
-        .dark .pin-dot { background-color: #374151; }
-        .dark .pin-dot.filled { background-color: #60a5fa; }
+        /* เอฟเฟกต์รูปขยาย */
+        .zoom-img { transition: transform 0.2s; cursor: pointer; }
+        .zoom-img:hover { transform: scale(3); z-index: 50; position: relative; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5); }
     </style>
 </head>
-<body class="bg-gray-50 dark:bg-slate-900 h-screen flex flex-col items-center font-sans text-gray-800 dark:text-gray-100 relative overflow-hidden transition-colors duration-300">
+<body class="flex h-screen overflow-hidden text-gray-800">
 
-    <div id="networkBanner" class="fixed top-0 left-0 w-full py-1.5 text-center text-xs font-bold text-white transition-transform duration-300 transform -translate-y-full z-50 shadow-md"></div>
-
-    <div id="lockScreen" class="fixed inset-0 bg-white dark:bg-slate-900 z-[110] flex flex-col items-center justify-center p-6 transition-opacity duration-500 hidden">
-        <div class="w-full max-w-sm text-center">
-            <div class="w-20 h-20 bg-blue-50 dark:bg-slate-800 rounded-full flex items-center justify-center text-3xl mx-auto mb-4">🔒</div>
-            <h2 class="text-xl font-bold text-gray-800 dark:text-white mb-2" id="lockScreenTitle">กรุณาใส่รหัส PIN</h2>
-            <p class="text-sm text-gray-500 dark:text-gray-400 mb-8" id="lockScreenSub">เพื่อเข้าใช้งานระบบลงเวลา</p>
-            
-            <div class="flex justify-center space-x-4 mb-8">
-                <div class="pin-dot" id="dot-1"></div><div class="pin-dot" id="dot-2"></div>
-                <div class="pin-dot" id="dot-3"></div><div class="pin-dot" id="dot-4"></div>
-            </div>
-
-            <div class="grid grid-cols-3 gap-4 max-w-[260px] mx-auto text-xl font-medium">
-                <button onclick="pressPin('1')" class="w-16 h-16 rounded-full bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 active:scale-90 transition mx-auto flex items-center justify-center">1</button>
-                <button onclick="pressPin('2')" class="w-16 h-16 rounded-full bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 active:scale-90 transition mx-auto flex items-center justify-center">2</button>
-                <button onclick="pressPin('3')" class="w-16 h-16 rounded-full bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 active:scale-90 transition mx-auto flex items-center justify-center">3</button>
-                <button onclick="pressPin('4')" class="w-16 h-16 rounded-full bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 active:scale-90 transition mx-auto flex items-center justify-center">4</button>
-                <button onclick="pressPin('5')" class="w-16 h-16 rounded-full bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 active:scale-90 transition mx-auto flex items-center justify-center">5</button>
-                <button onclick="pressPin('6')" class="w-16 h-16 rounded-full bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 active:scale-90 transition mx-auto flex items-center justify-center">6</button>
-                <button onclick="pressPin('7')" class="w-16 h-16 rounded-full bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 active:scale-90 transition mx-auto flex items-center justify-center">7</button>
-                <button onclick="pressPin('8')" class="w-16 h-16 rounded-full bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 active:scale-90 transition mx-auto flex items-center justify-center">8</button>
-                <button onclick="pressPin('9')" class="w-16 h-16 rounded-full bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 active:scale-90 transition mx-auto flex items-center justify-center">9</button>
-                <div></div>
-                <button onclick="pressPin('0')" class="w-16 h-16 rounded-full bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 active:scale-90 transition mx-auto flex items-center justify-center">0</button>
-                <button onclick="deletePin()" class="w-16 h-16 rounded-full text-gray-400 active:scale-90 transition mx-auto flex items-center justify-center text-sm font-bold">ลบ</button>
-            </div>
+    <aside class="w-64 bg-slate-900 text-white flex flex-col hidden md:flex">
+        <div class="h-16 flex items-center px-6 border-b border-slate-800">
+            <span class="text-xl font-bold tracking-wider">🏢 HR <span class="text-blue-400">Hub</span></span>
         </div>
-    </div>
-
-    <div id="onboardingScreen" class="fixed inset-0 bg-white dark:bg-slate-900 z-[100] flex flex-col items-center justify-center p-6 transition-opacity duration-500 hidden">
-        <div class="w-full max-w-sm text-center">
-            <div class="w-20 h-20 bg-blue-100 dark:bg-blue-900/50 rounded-full flex items-center justify-center text-3xl mx-auto mb-4">👋</div>
-            <h1 class="text-2xl font-bold text-gray-800 dark:text-white mb-2">ลงทะเบียนพนักงาน</h1>
-            <p class="text-gray-500 dark:text-gray-400 text-xs mb-6">ตั้งค่าบัญชีและรหัสผ่านเพื่อเริ่มใช้งาน</p>
-            <div class="space-y-3 text-left">
-                <div>
-                    <label class="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1 ml-1">รหัสพนักงาน</label>
-                    <input type="text" id="empIdInput" placeholder="เช่น EMP-001" class="w-full p-3.5 rounded-xl bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white">
-                </div>
-                <div>
-                    <label class="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1 ml-1">ชื่อ - นามสกุล</label>
-                    <input type="text" id="empNameInput" placeholder="ชื่อจริง นามสกุล" class="w-full p-3.5 rounded-xl bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white">
-                </div>
-                <div>
-                    <label class="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1 ml-1 text-blue-600 dark:text-blue-400">ตั้งรหัส PIN (4 หลัก) สำหรับเข้าแอป</label>
-                    <input type="password" id="empPinInput" placeholder="ตัวเลข 4 หลัก" pattern="[0-9]*" inputmode="numeric" maxlength="4" class="w-full p-3.5 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white text-center text-xl tracking-[0.5em] font-bold">
-                </div>
-            </div>
-            <button onclick="saveProfile()" class="w-full bg-blue-600 text-white font-bold py-3.5 rounded-xl mt-8 shadow-lg shadow-blue-600/30 active:scale-95 transition-all">บันทึกข้อมูล</button>
+        <nav class="flex-1 overflow-y-auto py-4">
+            <ul class="space-y-1">
+                <li>
+                    <a href="#" class="flex items-center px-6 py-3 bg-blue-600 text-white border-r-4 border-blue-400">
+                        <span class="mr-3">📊</span> แดชบอร์ด (Overview)
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="flex items-center px-6 py-3 text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
+                        <span class="mr-3">👥</span> จัดการพนักงาน
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="flex items-center px-6 py-3 text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
+                        <span class="mr-3">⚙️</span> ตั้งค่าระบบ
+                    </a>
+                </li>
+            </ul>
+        </nav>
+        <div class="p-4 border-t border-slate-800 text-xs text-slate-500 text-center">
+            ระบบบริหารงานบุคคล v1.0
         </div>
-    </div>
+    </aside>
 
-    <div class="w-full h-full flex flex-col items-center p-4 overflow-y-auto hide-scrollbar pt-6 opacity-0 transition-opacity duration-700" id="mainAppContent">
+    <main class="flex-1 flex flex-col h-screen overflow-hidden">
         
-        <div class="w-full max-w-md flex justify-between items-center mb-4 px-2">
+        <header class="h-16 bg-white shadow-sm flex items-center justify-between px-6 z-10">
             <div class="flex items-center">
-                <div class="w-11 h-11 bg-gradient-to-tr from-blue-600 to-blue-400 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-sm border-2 border-white dark:border-slate-800" id="avatarLetter">?</div>
-                <div class="ml-3">
-                    <p class="text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider">สวัสดีตอนเช้า</p>
-                    <h2 class="text-base font-bold text-gray-800 dark:text-white leading-tight truncate w-40" id="displayEmpName">ชื่อพนักงาน</h2>
+                <button class="md:hidden mr-4 text-gray-500 hover:text-gray-700">☰</button>
+                <h2 class="text-xl font-bold text-gray-800">ข้อมูลการลงเวลาของพนักงาน</h2>
+            </div>
+            <div class="flex items-center space-x-4">
+                <span class="text-sm font-medium text-gray-500" id="currentDateHeader">กำลังโหลด...</span>
+                <div class="h-8 w-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold border border-blue-200">
+                    HR
                 </div>
             </div>
-            <button onclick="openSettingsModal()" class="w-9 h-9 bg-white dark:bg-slate-800 rounded-full shadow-sm border border-gray-100 dark:border-slate-700 flex items-center justify-center text-lg hover:bg-gray-50 dark:hover:bg-slate-700 active:scale-95 transition text-gray-600 dark:text-gray-300">⚙️</button>
-        </div>
+        </header>
 
-        <div class="w-full max-w-md mb-4 bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-indigo-900/30 dark:to-blue-900/30 rounded-2xl p-3 border border-indigo-100 dark:border-indigo-800/50 flex items-start shadow-sm">
-            <span class="text-lg mr-2">📢</span>
-            <div>
-                <h3 class="text-xs font-bold text-indigo-800 dark:text-indigo-300 mb-0.5">ประกาศจาก HR (สัปดาห์นี้)</h3>
-                <p class="text-[11px] text-indigo-600/80 dark:text-indigo-300/80 leading-relaxed">
-                    วันศุกร์นี้มีกิจกรรม Big Cleaning Day โปรดเตรียมตัวมาในชุดที่ทะมัดทะแมง ขอบคุณครับ
-                </p>
-            </div>
-        </div>
-
-        <div class="w-full max-w-md bg-white dark:bg-slate-800 rounded-3xl shadow-[0_4px_20px_rgba(0,0,0,0.02)] dark:shadow-none p-5 text-center border border-gray-50 dark:border-slate-700 mb-5 transition-colors duration-300 relative overflow-hidden">
-            <p class="text-gray-400 dark:text-gray-500 text-[11px] font-bold tracking-widest uppercase mb-1" id="currentDate">กำลังโหลด...</p>
-            <div class="text-[2.75rem] font-mono font-black text-slate-800 dark:text-white tracking-tighter leading-none" id="currentTime">00:00:00</div>
-        </div>
-
-        <div class="w-full max-w-md flex flex-col items-center relative z-10 mb-2">
-            <input type="file" id="cameraInput" accept="image/*" capture="user" class="hidden" onchange="processCheckIn(event)">
+        <div class="flex-1 overflow-y-auto p-6 bg-gray-50">
             
-            <div class="relative w-44 h-44 rounded-full mb-5">
-                <button id="actionBtn" onclick="initiateAction()" 
-                    class="absolute inset-0 w-full h-full rounded-full text-white text-3xl font-black shadow-xl transition-all duration-300 transform active:scale-95 flex flex-col items-center justify-center bg-gray-300 dark:bg-slate-700 border-[5px] border-white dark:border-slate-800 z-10">
-                    <span id="btnText">รอพิกัด</span>
-                    <span id="btnSubText" class="text-xs font-medium mt-1 opacity-90">ตรวจสอบ GPS...</span>
-                </button>
-            </div>
-            
-            <button onclick="openLeaveModal()" class="mb-4 text-xs text-gray-500 dark:text-gray-400 font-bold bg-white dark:bg-slate-800 px-4 py-2 rounded-full shadow-sm border border-gray-100 dark:border-slate-700 active:scale-95 transition">
-                📝 แจ้งลางาน / ป่วย
-            </button>
-
-            <div class="w-full bg-white dark:bg-slate-800 rounded-2xl p-2.5 shadow-sm flex items-center justify-between border border-gray-50 dark:border-slate-700 mb-2">
-                <div class="flex items-center">
-                    <div id="gpsStatusDot" class="w-2 h-2 rounded-full bg-gray-400 mr-2.5 animate-pulse ml-1"></div>
-                    <span id="locationStatus" class="text-[11px] text-gray-600 dark:text-gray-400 font-bold tracking-wide">กำลังค้นหาตำแหน่ง...</span>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+                <div class="bg-white rounded-xl shadow-sm p-5 border border-gray-100 flex items-center justify-between">
+                    <div>
+                        <p class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">บันทึกเวลาทั้งหมด</p>
+                        <h3 class="text-3xl font-black text-gray-800" id="statTotal">0</h3>
+                    </div>
+                    <div class="w-12 h-12 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center text-2xl">📋</div>
                 </div>
-                <span id="distanceBadge" class="text-[9px] bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400 px-2 py-0.5 rounded-md font-mono font-bold">-</span>
-            </div>
-        </div>
-
-        <div class="w-full max-w-md mt-2 bg-white dark:bg-slate-800 rounded-[2rem] shadow-sm p-6 flex-grow mb-6 border border-gray-50 dark:border-slate-700 transition-colors duration-300">
-            <div class="flex justify-between items-center mb-4 pb-3 border-b border-gray-50 dark:border-slate-700">
-                <h2 class="text-sm font-bold text-gray-800 dark:text-white">ประวัติการลงเวลา</h2>
-                <div class="flex space-x-2">
-                    <button onclick="syncOfflineData()" id="manualSyncBtn" class="hidden text-[10px] bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 px-2.5 py-1.5 rounded-full font-bold active:scale-95">อัปเดต ☁️</button>
-                    <button onclick="exportCSV()" class="text-[10px] bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-3 py-1.5 rounded-full font-bold active:scale-95">โหลด CSV 📥</button>
+                <div class="bg-white rounded-xl shadow-sm p-5 border border-gray-100 flex items-center justify-between">
+                    <div>
+                        <p class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">เข้างานวันนี้</p>
+                        <h3 class="text-3xl font-black text-emerald-600" id="statToday">0</h3>
+                    </div>
+                    <div class="w-12 h-12 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center text-2xl">✔️</div>
                 </div>
-            </div>
-            <div id="logHistory" class="space-y-4"></div>
-        </div>
-    </div>
-
-    <div id="customModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[150] hidden flex items-center justify-center p-4 opacity-0 transition-opacity duration-300">
-        <div class="bg-white dark:bg-slate-800 rounded-[2rem] p-6 w-full max-w-sm shadow-2xl modal-enter text-center">
-            <div id="modalIcon" class="text-5xl mb-3 mt-2">⚠️</div>
-            <h3 id="modalTitle" class="text-xl font-bold text-gray-800 dark:text-white mb-2">หัวข้อ</h3>
-            <p id="modalMessage" class="text-gray-500 dark:text-gray-400 text-sm mb-6 px-2">รายละเอียด</p>
-            <div id="modalButtons" class="flex space-x-3 w-full"></div>
-        </div>
-    </div>
-
-    <div id="leaveModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[150] hidden flex items-center justify-center p-4 opacity-0 transition-opacity duration-300">
-        <div class="bg-white dark:bg-slate-800 rounded-[2rem] p-6 w-full max-w-sm shadow-2xl modal-enter text-left">
-            <h3 class="text-xl font-bold text-gray-800 dark:text-white mb-4">📝 แจ้งลางาน</h3>
-            <div class="space-y-4">
-                <div>
-                    <label class="text-xs font-bold text-gray-600 dark:text-gray-400 mb-1 ml-1 block">ประเภทการลา</label>
-                    <select id="leaveTypeInput" class="w-full p-4 rounded-2xl bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:text-white"><option>ลาป่วย</option><option>ลากิจ</option><option>พักร้อน</option></select>
+                <div class="bg-white rounded-xl shadow-sm p-5 border border-gray-100 flex items-center justify-between">
+                    <div>
+                        <p class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">มาสาย (วันนี้)</p>
+                        <h3 class="text-3xl font-black text-rose-600" id="statLate">0</h3>
+                    </div>
+                    <div class="w-12 h-12 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center text-2xl">⏰</div>
                 </div>
-                <div>
-                    <label class="text-xs font-bold text-gray-600 dark:text-gray-400 mb-1 ml-1 block">เหตุผล</label>
-                    <textarea id="leaveReasonInput" rows="2" class="w-full p-4 rounded-2xl bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:text-white"></textarea>
+                <div class="bg-white rounded-xl shadow-sm p-5 border border-gray-100 flex items-center justify-between">
+                    <div>
+                        <p class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">ลางาน (วันนี้)</p>
+                        <h3 class="text-3xl font-black text-orange-500" id="statLeave">0</h3>
+                    </div>
+                    <div class="w-12 h-12 bg-orange-50 text-orange-500 rounded-full flex items-center justify-center text-2xl">📝</div>
                 </div>
             </div>
-            <div class="flex space-x-3 w-full mt-6">
-                <button onclick="closeLeaveModal()" class="flex-1 bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 font-bold py-3.5 rounded-2xl">ยกเลิก</button>
-                <button onclick="submitLeave()" class="flex-1 bg-blue-600 text-white font-bold py-3.5 rounded-2xl">ยืนยัน</button>
-            </div>
-        </div>
-    </div>
 
-    <div id="settingsModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[150] hidden flex items-center justify-center p-4 opacity-0 transition-opacity duration-300">
-        <div class="bg-white dark:bg-slate-800 rounded-[2rem] p-6 w-full max-w-sm shadow-2xl modal-enter text-left">
-            <h3 class="text-xl font-bold text-gray-800 dark:text-white mb-4 flex justify-between items-center"><span>⚙️ การตั้งค่า</span><button onclick="closeSettingsModal()" class="text-gray-400 bg-gray-100 dark:bg-slate-700 w-8 h-8 rounded-full">✕</button></h3>
-            <div class="space-y-4 mb-2">
-                <div class="flex items-center justify-between p-4 bg-gray-50 dark:bg-slate-700 rounded-2xl">
-                    <span class="text-sm font-bold text-gray-700 dark:text-gray-200">🌙 โหมดกลางคืน</span>
-                    <button onclick="toggleDarkMode()" class="w-12 h-6 bg-gray-300 dark:bg-blue-500 rounded-full relative transition-colors focus:outline-none"><div id="darkModeKnob" class="w-5 h-5 bg-white rounded-full absolute top-0.5 transition-all shadow-sm"></div></button>
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
+                
+                <div class="p-5 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-center space-y-4 sm:space-y-0">
+                    <div class="relative w-full sm:w-72">
+                        <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">🔍</span>
+                        <input type="text" id="searchInput" onkeyup="filterTable()" placeholder="ค้นหาชื่อ หรือ รหัสพนักงาน..." class="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm">
+                    </div>
+                    <div class="flex space-x-3 w-full sm:w-auto">
+                        <button onclick="injectMockData()" class="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm font-bold hover:bg-gray-200 transition hidden" id="mockDataBtn">
+                            + เพิ่มข้อมูลจำลอง
+                        </button>
+                        <button onclick="exportMasterCSV()" class="flex-1 sm:flex-none px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition shadow-md shadow-blue-500/30 flex items-center justify-center">
+                            <span class="mr-2">📥</span> โหลด Excel (CSV)
+                        </button>
+                    </div>
                 </div>
-                <button onclick="closeSettingsModal(); confirmSetOffice();" class="w-full flex items-center justify-between p-4 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-2xl active:scale-95"><span class="text-sm font-bold">📍 ตั้งค่าพิกัดออฟฟิศใหม่</span><span>→</span></button>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse" id="dataTable">
+                        <thead>
+                            <tr class="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider">
+                                <th class="p-4 font-bold border-b border-gray-200">รูปถ่าย</th>
+                                <th class="p-4 font-bold border-b border-gray-200">รหัส / ชื่อพนักงาน</th>
+                                <th class="p-4 font-bold border-b border-gray-200">วันที่ และ เวลา</th>
+                                <th class="p-4 font-bold border-b border-gray-200">ประเภท</th>
+                                <th class="p-4 font-bold border-b border-gray-200">สถานะ</th>
+                                <th class="p-4 font-bold border-b border-gray-200">หมายเหตุ</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody" class="text-sm divide-y divide-gray-100">
+                            </tbody>
+                    </table>
+                </div>
+                
+                <div id="emptyState" class="hidden p-10 text-center flex flex-col items-center justify-center">
+                    <div class="text-6xl mb-4 opacity-50">📭</div>
+                    <h3 class="text-lg font-bold text-gray-700 mb-1">ยังไม่มีข้อมูลการลงเวลา</h3>
+                    <p class="text-gray-500 text-sm">เมื่อพนักงานกดลงเวลาผ่านมือถือ ข้อมูลจะมาปรากฏที่นี่</p>
+                </div>
             </div>
         </div>
-    </div>
-
-    <div id="noteModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[150] hidden flex items-center justify-center p-4 opacity-0 transition-opacity duration-300">
-        <div class="bg-white dark:bg-slate-800 rounded-[2rem] p-6 w-full max-w-sm shadow-2xl modal-enter text-left">
-            <h3 class="text-lg font-bold text-gray-800 dark:text-white mb-2">📝 ระบุหมายเหตุ (ไม่บังคับ)</h3>
-            <input type="text" id="actionNoteInput" placeholder="เช่น เข้าสายรถติด, ลืมกดออกงาน..." class="w-full p-4 rounded-2xl bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:text-white mb-4">
-            <div class="flex space-x-3 w-full">
-                <button onclick="cancelAction()" class="flex-1 bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 font-bold py-3.5 rounded-2xl">ยกเลิก</button>
-                <button onclick="proceedToCamera()" class="flex-1 bg-blue-600 text-white font-bold py-3.5 rounded-2xl">ถ่ายรูปยืนยัน</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="successToast" class="fixed top-12 left-1/2 transform -translate-x-1/2 bg-slate-800 dark:bg-slate-100 text-white dark:text-slate-900 px-5 py-3 rounded-full shadow-xl z-[200] flex items-center space-x-2 transition-all duration-300 opacity-0 -translate-y-10 pointer-events-none border border-slate-700">
-        <span class="text-emerald-400 dark:text-emerald-500 text-lg">✔️</span><span class="font-bold text-sm tracking-wide" id="toastMsg">บันทึกสำเร็จ</span>
-    </div>
+    </main>
 
     <script>
-        // --- Core Variables ---
-        let isCheckedIn = false; let isLocationValid = false; let logs = JSON.parse(localStorage.getItem('timeLogs')) || [];
-        let officeCoords = JSON.parse(localStorage.getItem('officeConfig')); let userProfile = JSON.parse(localStorage.getItem('userProfile'));
-        const ALLOWED_RADIUS_METERS = 100; const WORK_START_TIME = "09:00:00"; 
-        
-        // --- Dark Mode ---
-        let isDarkMode = localStorage.getItem('theme') === 'dark';
-        function applyTheme() {
-            if (isDarkMode) { document.documentElement.classList.add('dark'); document.getElementById('darkModeKnob')?.classList.add('left-6'); document.getElementById('darkModeKnob')?.classList.remove('left-0.5'); } 
-            else { document.documentElement.classList.remove('dark'); document.getElementById('darkModeKnob')?.classList.remove('left-6'); document.getElementById('darkModeKnob')?.classList.add('left-0.5'); }
-        }
-        function toggleDarkMode() { isDarkMode = !isDarkMode; localStorage.setItem('theme', isDarkMode ? 'dark' : 'light'); applyTheme(); }
-        applyTheme();
+        // โหลดข้อมูลดิบจากที่พนักงานกดไว้ (ดึงจาก LocalStorage)
+        let allLogs = JSON.parse(localStorage.getItem('timeLogs')) || [];
 
-        // --- App Initialization (Security Lock Logic) ---
-        let currentPinInput = "";
-        function initApp() {
-            if (!userProfile) {
-                // ครั้งแรก ให้ไปหน้าลงทะเบียน
-                document.getElementById('onboardingScreen').classList.remove('hidden');
-                setTimeout(() => document.getElementById('onboardingScreen').classList.remove('opacity-0'), 10);
-            } else if (userProfile.pin) {
-                // มีบัญชีแล้ว ให้แสดงหน้าใส่รหัส PIN
-                document.getElementById('lockScreen').classList.remove('hidden');
-                setTimeout(() => document.getElementById('lockScreen').classList.remove('opacity-0'), 10);
-                document.getElementById('displayEmpName').innerText = userProfile.name;
-                document.getElementById('avatarLetter').innerText = userProfile.name.charAt(0).toUpperCase();
-            } else {
-                unlockApp(); // บัญชีเก่าที่ไม่มี PIN
-            }
-        }
-
-        // --- PIN Code Logic ---
-        function pressPin(num) {
-            if (currentPinInput.length < 4) {
-                currentPinInput += num;
-                updatePinDots();
-                if (currentPinInput.length === 4) setTimeout(verifyPin, 200);
-            }
-        }
-        function deletePin() {
-            if (currentPinInput.length > 0) {
-                currentPinInput = currentPinInput.slice(0, -1);
-                updatePinDots();
-            }
-        }
-        function updatePinDots() {
-            for (let i = 1; i <= 4; i++) {
-                const dot = document.getElementById(`dot-${i}`);
-                if (i <= currentPinInput.length) dot.classList.add('filled');
-                else dot.classList.remove('filled');
-            }
-        }
-        function verifyPin() {
-            if (currentPinInput === userProfile.pin) {
-                // รหัสถูก เปิดแอป
-                document.getElementById('lockScreen').classList.add('opacity-0');
-                setTimeout(() => {
-                    document.getElementById('lockScreen').classList.add('hidden');
-                    unlockApp();
-                }, 400);
-            } else {
-                // รหัสผิด
-                const title = document.getElementById('lockScreenTitle');
-                title.innerText = "รหัส PIN ไม่ถูกต้อง!";
-                title.classList.add('text-red-500');
-                setTimeout(() => {
-                    currentPinInput = ""; updatePinDots();
-                    title.innerText = "กรุณาใส่รหัส PIN";
-                    title.classList.remove('text-red-500');
-                }, 1000);
-            }
-        }
-
-        function unlockApp() {
-            document.getElementById('mainAppContent').classList.remove('opacity-0');
-            if(logs.length > 0) { const lastActive = logs.find(l => l.type !== 'ลางาน'); if (lastActive && lastActive.type === 'เข้างาน') isCheckedIn = true; }
-            if(officeCoords) trackLocation();
-            renderLogs(); updateButtonUI();
-            if(!navigator.onLine) updateNetworkStatus(false);
-            else syncOfflineData(); // แอบซิงค์ทันทีเมื่อเข้าแอปและมีเน็ต
-        }
-
-        // --- Onboarding Save ---
-        function saveProfile() {
-            const empId = document.getElementById('empIdInput').value.trim(); const empName = document.getElementById('empNameInput').value.trim();
-            const empPin = document.getElementById('empPinInput').value;
-            if (!empId || !empName || empPin.length !== 4) return alert("กรุณากรอกข้อมูลให้ครบ และตั้งรหัส PIN 4 หลักครับ");
-            
-            userProfile = { id: empId, name: empName, pin: empPin }; 
-            localStorage.setItem('userProfile', JSON.stringify(userProfile));
-            document.getElementById('onboardingScreen').classList.add('opacity-0'); 
-            setTimeout(() => { document.getElementById('onboardingScreen').classList.add('hidden'); initApp(); }, 500);
-        }
-
-        // --- Offline/Online Sync Manager ---
-        window.addEventListener('online', () => { updateNetworkStatus(true); syncOfflineData(); });
-        window.addEventListener('offline', () => updateNetworkStatus(false));
-        
-        function updateNetworkStatus(isOnline) {
-            const banner = document.getElementById('networkBanner');
-            if (isOnline) { banner.innerText = "🟢 กลับมาออนไลน์แล้ว"; banner.className = "fixed top-0 left-0 w-full py-1.5 text-center text-xs font-bold text-white transition-transform duration-300 transform translate-y-0 z-50 shadow-md bg-emerald-500"; setTimeout(() => banner.classList.replace('translate-y-0', '-translate-y-full'), 3000); } 
-            else { banner.innerText = "🔴 ออฟไลน์ (บันทึกข้อมูลในเครื่องก่อน)"; banner.className = "fixed top-0 left-0 w-full py-1.5 text-center text-xs font-bold text-white transition-transform duration-300 transform translate-y-0 z-50 shadow-md bg-red-500"; }
-        }
-
-        function syncOfflineData() {
-            if (!navigator.onLine) return;
-            let syncedCount = 0;
-            // จำลองการส่งข้อมูลไป Server โดยหา log ที่ isSynced = false
-            logs = logs.map(log => {
-                if (log.isSynced === false) { syncedCount++; return { ...log, isSynced: true }; }
-                return log;
+        function initAdminApp() {
+            // ตั้งค่าวันที่
+            const now = new Date();
+            document.getElementById('currentDateHeader').innerText = now.toLocaleDateString('th-TH', { 
+                weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
             });
-            
-            if (syncedCount > 0) {
-                localStorage.setItem('timeLogs', JSON.stringify(logs));
-                renderLogs();
-                document.getElementById('toastMsg').innerText = `อัปเดตข้อมูลขึ้นระบบสำเร็จ (${syncedCount} รายการ)`;
-                showSuccessToast();
+
+            // ถ้าไม่มีข้อมูลเลย ให้แสดงปุ่ม "เพิ่มข้อมูลจำลอง" เพื่อให้ HR ทดสอบระบบได้
+            if(allLogs.length === 0) {
+                document.getElementById('mockDataBtn').classList.remove('hidden');
+                document.getElementById('emptyState').classList.remove('hidden');
+            } else {
+                renderDashboard();
             }
         }
 
-        // --- Location & GPS ---
-        function confirmSetOffice() { showAppModal('ตั้งค่าระบบ', 'ตั้งพิกัดปัจจุบันเป็นออฟฟิศ?', '📍', 'confirm', () => { navigator.geolocation.getCurrentPosition((p) => { officeCoords = { lat: p.coords.latitude, lng: p.coords.longitude }; localStorage.setItem('officeConfig', JSON.stringify(officeCoords)); showSuccessToast(); trackLocation(); }, () => showAppModal('ผิดพลาด', 'โปรดเปิด GPS', '❌', 'alert'), { enableHighAccuracy: true }); }); }
-        function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) { var R = 6371; var dLat = (lat2 - lat1) * Math.PI / 180; var dLon = (lon2 - lon1) * Math.PI / 180; var a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2); return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); }
-        
-        function trackLocation() {
-            if (!officeCoords) return; document.getElementById('actionBtn').classList.add('animate-radar');
-            navigator.geolocation.watchPosition((p) => {
-                const dist = Math.floor(getDistanceFromLatLonInKm(officeCoords.lat, officeCoords.lng, p.coords.latitude, p.coords.longitude) * 1000);
-                const sText = document.getElementById('locationStatus'), badge = document.getElementById('distanceBadge'), dot = document.getElementById('gpsStatusDot');
-                badge.innerText = `${dist} ม.`;
-                if (dist <= ALLOWED_RADIUS_METERS) {
-                    isLocationValid = true; sText.innerText = `อยู่ในพื้นที่ออฟฟิศ`; sText.className = "text-[11px] text-emerald-600 dark:text-emerald-400 font-bold tracking-wide";
-                    badge.className = "text-[9px] bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded-md font-mono font-bold border border-emerald-100 dark:border-emerald-800"; dot.className = "w-2 h-2 rounded-full bg-emerald-500 mr-2.5 ml-1";
-                } else {
-                    isLocationValid = false; sText.innerText = `อยู่นอกพื้นที่ทำงาน`; sText.className = "text-[11px] text-rose-500 dark:text-rose-400 font-bold tracking-wide";
-                    badge.className = "text-[9px] bg-rose-50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 px-2 py-0.5 rounded-md font-mono font-bold border border-rose-100 dark:border-rose-800"; dot.className = "w-2 h-2 rounded-full bg-rose-500 mr-2.5 ml-1";
+        function renderDashboard() {
+            document.getElementById('emptyState').classList.add('hidden');
+            renderTable(allLogs);
+            calculateStats(allLogs);
+        }
+
+        // ระบบคำนวณสถิติ
+        function calculateStats(logs) {
+            const todayStr = new Date().toLocaleDateString('th-TH');
+            
+            let todayCheckIns = 0;
+            let todayLates = 0;
+            let todayLeaves = 0;
+
+            logs.forEach(log => {
+                if(log.date === todayStr) {
+                    if(log.type === 'เข้างาน' || log.type === 'ออกงาน') todayCheckIns++;
+                    if(log.statusBadge === 'มาสาย') todayLates++;
+                    if(log.type === 'ลางาน') todayLeaves++;
                 }
-                updateButtonUI();
-            }, () => {}, { enableHighAccuracy: true });
+            });
+
+            document.getElementById('statTotal').innerText = logs.length.toLocaleString();
+            document.getElementById('statToday').innerText = todayCheckIns;
+            document.getElementById('statLate').innerText = todayLates;
+            document.getElementById('statLeave').innerText = todayLeaves;
         }
 
-        // --- Action Flow ---
-        function initiateAction() {
-            if (!officeCoords) return showAppModal('เริ่มใช้งาน', "กดไอคอน ⚙️ ตั้งพิกัดออฟฟิศก่อนครับ", '🏢', 'alert');
-            if (!isLocationValid) return showAppModal('นอกระยะ', "คุณอยู่ไกลเกินกำหนด", '🚫', 'alert');
+        // ระบบสร้างตาราง
+        function renderTable(logsToRender) {
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+
+            logsToRender.forEach(log => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-gray-50 transition-colors";
+
+                // จัดการรูปภาพ (ถ้าเป็นการลา จะเป็นไอคอนแทน)
+                let photoHtml = '';
+                if(log.type === 'ลางาน') {
+                    photoHtml = `<div class="w-12 h-12 bg-orange-50 text-orange-500 rounded-lg flex items-center justify-center text-xl border border-orange-100">📝</div>`;
+                } else if (log.photo) {
+                    photoHtml = `<img src="${log.photo}" class="w-12 h-12 rounded-lg object-cover border border-gray-200 shadow-sm zoom-img" alt="Selfie">`;
+                } else {
+                    photoHtml = `<div class="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400">N/A</div>`;
+                }
+
+                // จัดการป้ายสถานะ (Badge)
+                let badgeHtml = '<span class="text-gray-400">-</span>';
+                if(log.statusBadge === 'มาสาย') {
+                    badgeHtml = `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-700 border border-rose-200">มาสาย</span>`;
+                } else if(log.workDuration) {
+                    badgeHtml = `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">ทำ ${log.workDuration}</span>`;
+                } else if(log.type === 'ลางาน') {
+                    badgeHtml = `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-orange-100 text-orange-700 border border-orange-200">${log.status}</span>`;
+                } else if(log.type === 'เข้างาน') {
+                    badgeHtml = `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-700 border border-blue-200">ปกติ</span>`;
+                }
+
+                // สไตล์ของประเภท เข้า/ออก/ลา
+                let typeColor = log.type === 'เข้างาน' ? 'text-blue-600' : (log.type === 'ลางาน' ? 'text-orange-500' : 'text-rose-500');
+
+                tr.innerHTML = `
+                    <td class="p-4">${photoHtml}</td>
+                    <td class="p-4">
+                        <div class="font-bold text-gray-800">${log.empName || 'ไม่ระบุชื่อ'}</div>
+                        <div class="text-xs text-gray-500">${log.empId || '-'}</div>
+                    </td>
+                    <td class="p-4">
+                        <div class="font-bold text-gray-800">${log.date}</div>
+                        <div class="text-xs text-gray-500 font-mono">${log.time}</div>
+                    </td>
+                    <td class="p-4 font-bold ${typeColor}">${log.type}</td>
+                    <td class="p-4">${badgeHtml}</td>
+                    <td class="p-4 text-xs text-gray-600 max-w-xs truncate" title="${log.note || '-'}">${log.note || '-'}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // ระบบค้นหาอัจฉริยะ (Search Filter)
+        function filterTable() {
+            const query = document.getElementById('searchInput').value.toLowerCase();
+            const filteredLogs = allLogs.filter(log => {
+                const nameMatch = (log.empName || '').toLowerCase().includes(query);
+                const idMatch = (log.empId || '').toLowerCase().includes(query);
+                return nameMatch || idMatch;
+            });
+            renderTable(filteredLogs);
+        }
+
+        // ระบบส่งออกไฟล์ CSV
+        function exportMasterCSV() {
+            if (allLogs.length === 0) return alert("ไม่มีข้อมูลให้ดาวน์โหลดครับ");
             
-            // เปิดหน้าต่างกรอกหมายเหตุก่อนถ่ายรูป (UX สะอาดขึ้น)
-            document.getElementById('actionNoteInput').value = '';
-            document.getElementById('noteModal').classList.remove('hidden');
-            setTimeout(() => document.getElementById('noteModal').classList.remove('opacity-0'), 10);
-        }
-        function cancelAction() {
-            document.getElementById('noteModal').classList.add('opacity-0');
-            setTimeout(() => document.getElementById('noteModal').classList.add('hidden'), 300);
-        }
-        function proceedToCamera() {
-            cancelAction();
-            if (isCheckedIn) { showAppModal('ออกงาน', "ยืนยันลงเวลา 'กลับบ้าน' ?", '👋', 'confirm', () => document.getElementById('cameraInput').click()); } 
-            else { document.getElementById('cameraInput').click(); }
-        }
-
-        function processCheckIn(event) {
-            const file = event.target.files[0]; if (!file) return;
-            const reader = new FileReader(); reader.onload = function(e) {
-                let img = new Image(); img.src = e.target.result; img.onload = function() {
-                    let canvas = document.createElement('canvas'); let w = img.width, h = img.height;
-                    if (w > h) { if (w > 500) { h *= 500 / w; w = 500; } } else { if (h > 500) { w *= 500 / h; h = 500; } }
-                    canvas.width = w; canvas.height = h; canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-                    saveLog(canvas.toDataURL('image/jpeg', 0.6));
-                };
-            }; reader.readAsDataURL(file);
-        }
-
-        function saveLog(photoBase64) {
-            const noteText = document.getElementById('actionNoteInput').value.trim(); 
-            const now = new Date(); const timeStr = now.toLocaleTimeString('th-TH', { hour12: false });
-            let statusBadge = ""; let workDurationStr = "";
-
-            if (!isCheckedIn) { if (timeStr > WORK_START_TIME) statusBadge = "มาสาย"; localStorage.setItem('lastCheckIn', now.getTime()); } 
-            else {
-                const storedCheckIn = localStorage.getItem('lastCheckIn');
-                if (storedCheckIn) {
-                    const diffMs = now.getTime() - parseInt(storedCheckIn); const mins = Math.floor(diffMs / 1000 / 60);
-                    workDurationStr = `${Math.floor(mins / 60)} ชม. ${mins % 60} น.`;
-                } localStorage.removeItem('lastCheckIn');
-            }
-
-            // ถ้ามีเน็ต ให้ isSynced = true ถ้าออฟไลน์ ให้ false
-            const isOnline = navigator.onLine;
-
-            const newLog = {
-                id: now.getTime(), date: now.toLocaleDateString('th-TH'), time: timeStr, type: isCheckedIn ? 'ออกงาน' : 'เข้างาน', 
-                note: noteText, photo: photoBase64, empId: userProfile.id, empName: userProfile.name, 
-                statusBadge: statusBadge, workDuration: workDurationStr, isSynced: isOnline
-            };
-
-            logs.unshift(newLog); if (logs.length > 50) logs.pop(); localStorage.setItem('timeLogs', JSON.stringify(logs));
-            isCheckedIn = !isCheckedIn; document.getElementById('cameraInput').value = ''; 
+            // ใช้ \uFEFF เพื่อให้ Excel อ่านภาษาไทย (UTF-8) ได้ถูกต้อง
+            let csvContent = "data:text/csv;charset=utf-8,\uFEFF"; 
+            csvContent += "รหัสพนักงาน,ชื่อพนักงาน,วันที่,เวลา,ประเภท,สถานะ/ระยะเวลา,หมายเหตุ\n"; 
             
-            updateButtonUI(); renderLogs(); 
-            document.getElementById('toastMsg').innerText = isOnline ? "บันทึกและส่งข้อมูลสำเร็จ" : "บันทึกลงเครื่อง (รอเน็ตเพื่อส่ง)";
-            showSuccessToast();
+            allLogs.forEach(log => {
+                const statusInfo = log.type === 'ลางาน' ? log.status : (log.statusBadge || log.workDuration || "ปกติ");
+                const safeNote = `"${(log.note || "-").replace(/"/g, '""')}"`;
+                csvContent += `${log.empId || "-"},${log.empName || "-"},${log.date},${log.time},${log.type},${statusInfo},${safeNote}\n`;
+            });
+
+            const link = document.createElement("a");
+            link.setAttribute("href", encodeURI(csvContent));
+            link.setAttribute("download", `Master_TimeLogs_${new Date().toLocaleDateString('th-TH').replace(/\//g, '-')}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
         }
 
-        function updateButtonUI() {
-            const btn = document.getElementById('actionBtn'), btnText = document.getElementById('btnText'), btnSubText = document.getElementById('btnSubText');
-            btn.className = "absolute inset-0 w-full h-full rounded-full text-white text-4xl font-black shadow-[0_15px_35px_rgba(0,0,0,0.1)] transition-all duration-300 transform active:scale-95 flex flex-col items-center justify-center border-[5px] border-white dark:border-slate-800 z-10";
-            if (!officeCoords) { btn.classList.add('bg-slate-200', 'dark:bg-slate-700', 'text-slate-400', 'border-slate-100'); btn.classList.remove('animate-radar'); btnText.innerText = 'รอตั้งค่า'; btnSubText.innerText = 'ตั้งค่าออฟฟิศก่อน'; } 
-            else if (!isLocationValid) { btn.classList.add('bg-slate-400', 'dark:bg-slate-600'); btn.classList.remove('animate-radar'); btnText.innerText = 'ล็อก'; btnSubText.innerText = 'อยู่นอกพื้นที่'; } 
-            else if (isCheckedIn) { btn.classList.add('bg-rose-500', 'shadow-[0_15px_40px_rgba(244,63,94,0.35)]'); btn.classList.add('animate-radar'); btnText.innerText = 'ออกงาน'; btnSubText.innerText = 'พร้อมลงเวลา'; } 
-            else { btn.classList.add('bg-blue-600', 'shadow-[0_15px_40px_rgba(37,99,235,0.35)]'); btn.classList.add('animate-radar'); btnText.innerText = 'เข้างาน'; btnSubText.innerText = 'พร้อมลงเวลา'; }
+        // สร้างข้อมูลจำลอง (เผื่อทดสอบแล้วไม่มีข้อมูล)
+        function injectMockData() {
+            const today = new Date().toLocaleDateString('th-TH');
+            const mockLogs = [
+                { id: 1, date: today, time: "08:45:00", type: "เข้างาน", empId: "EMP-001", empName: "สมชาย ใจดี", statusBadge: "", note: "", photo: "" },
+                { id: 2, date: today, time: "09:15:30", type: "เข้างาน", empId: "EMP-002", empName: "สมหญิง รักงาน", statusBadge: "มาสาย", note: "รถติดฝนตก", photo: "" },
+                { id: 3, date: today, time: "09:00:00", type: "ลางาน", empId: "EMP-003", empName: "วิชัย ขยันยิ่ง", status: "ลาป่วย", note: "ปวดหัว ตัวร้อน", photo: "" },
+                { id: 4, date: "15/4/2026", time: "18:05:00", type: "ออกงาน", empId: "EMP-001", empName: "สมชาย ใจดี", workDuration: "9 ชม. 20 น.", note: "", photo: "" }
+            ];
+            localStorage.setItem('timeLogs', JSON.stringify(mockLogs));
+            allLogs = mockLogs;
+            document.getElementById('mockDataBtn').classList.add('hidden');
+            renderDashboard();
         }
 
-        function renderLogs() {
-            const logContainer = document.getElementById('logHistory'); logContainer.innerHTML = '';
-            
-            // เช็คว่ามีอันไหนยังไม่ซิงค์ไหม เพื่อโชว์ปุ่ม "อัปเดต" แบบ Manual
-            const unsyncedExist = logs.some(l => l.isSynced === false);
-            if(unsyncedExist && navigator.onLine) document.getElementById('manualSyncBtn').classList.remove('hidden');
-            else document.getElementById('manualSyncBtn').classList.add('hidden');
-
-            if (logs.length === 0) return logContainer.innerHTML = '<div class="text-center text-gray-400 py-8 text-xs">ไม่มีประวัติ</div>';
-            
-            const groupedLogs = logs.reduce((acc, log) => { if (!acc[log.date]) acc[log.date] = []; acc[log.date].push(log); return acc; }, {});
-            for (const [date, dayLogs] of Object.entries(groupedLogs)) {
-                let dayHtml = `<div class="mb-4"><h3 class="text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-2 uppercase tracking-widest pl-1">${date}</h3><div class="space-y-2.5">`;
-                dayLogs.forEach(log => {
-                    const isCheckIn = log.type === 'เข้างาน'; const isLeave = log.type === 'ลางาน';
-                    const iconBg = isLeave ? 'bg-orange-50 text-orange-500 dark:bg-orange-900/30 dark:text-orange-400' : (isCheckIn ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-rose-50 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400');
-                    const noteHtml = log.note ? `<p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1 truncate">💬 ${log.note}</p>` : '';
-                    let badgeHtml = "";
-                    if (log.statusBadge === "มาสาย") badgeHtml = `<span class="ml-2 text-[8px] bg-rose-100 text-rose-600 dark:bg-rose-900/50 dark:text-rose-300 px-1.5 py-0.5 rounded font-bold">มาสาย</span>`;
-                    if (log.workDuration) badgeHtml = `<span class="ml-2 text-[8px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300 px-1.5 py-0.5 rounded font-bold border border-emerald-200 dark:border-emerald-800">ทำ ${log.workDuration}</span>`;
-                    
-                    // ระบบ Sync Icon
-                    const syncIcon = log.isSynced !== false 
-                        ? `<span class="text-emerald-500 text-xs ml-2" title="ซิงค์แล้ว">☁️✔️</span>` 
-                        : `<span class="text-amber-500 text-xs ml-2 animate-bounce" title="รอส่งข้อมูล">☁️⬆️</span>`;
-
-                    const imgHtml = isLeave ? `<div class="w-10 h-10 min-w-[2.5rem] rounded-xl bg-orange-50 dark:bg-orange-900/20 flex items-center justify-center text-lg mr-3">✉️</div>` 
-                    : `<img src="${log.photo}" class="w-10 h-10 min-w-[2.5rem] rounded-xl object-cover mr-3 border border-gray-100 dark:border-slate-700 bg-gray-50">`;
-
-                    dayHtml += `
-                        <div class="flex items-center p-2.5 bg-white dark:bg-slate-800 rounded-2xl border border-gray-50 dark:border-slate-700/50 shadow-[0_2px_5px_rgba(0,0,0,0.01)]">
-                            ${imgHtml}
-                            <div class="flex flex-col flex-grow overflow-hidden">
-                                <div class="flex justify-between items-center w-full">
-                                    <div class="flex items-center overflow-hidden">
-                                        <div class="w-5 h-5 min-w-[1.25rem] rounded-full ${iconBg} flex items-center justify-center text-[10px] mr-1.5 font-bold">${isLeave ? '📝' : (isCheckIn ? '→' : '←')}</div>
-                                        <span class="font-bold text-xs text-slate-700 dark:text-gray-200 whitespace-nowrap">${log.type}</span>
-                                        ${badgeHtml}
-                                    </div>
-                                    <div class="flex items-center">
-                                        <span class="font-mono font-bold text-slate-800 dark:text-gray-100 text-sm">${log.time}</span>
-                                        ${syncIcon}
-                                    </div>
-                                </div>
-                                ${noteHtml}
-                            </div>
-                        </div>`;
-                });
-                dayHtml += `</div></div>`; logContainer.innerHTML += dayHtml;
-            }
-        }
-
-        // --- Utilities (Modal & Time) ---
-        setInterval(() => { const now = new Date(); document.getElementById('currentTime').innerText = now.toLocaleTimeString('th-TH', { hour12: false }); document.getElementById('currentDate').innerText = now.toLocaleDateString('th-TH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }); }, 1000);
-        function showAppModal(title, msg, icon, type, onConfirm) { const modal = document.getElementById('customModal'); document.getElementById('modalTitle').innerText = title; document.getElementById('modalMessage').innerText = msg; document.getElementById('modalIcon').innerText = icon; const btnContainer = document.getElementById('modalButtons'); if (type === 'alert') btnContainer.innerHTML = `<button onclick="closeAppModal()" class="w-full bg-slate-800 dark:bg-blue-600 text-white font-bold py-3.5 rounded-2xl">รับทราบ</button>`; else if (type === 'confirm') { btnContainer.innerHTML = `<button onclick="closeAppModal()" class="flex-1 bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-200 font-bold py-3.5 rounded-2xl">ยกเลิก</button><button id="confirmBtn" class="flex-1 bg-blue-600 text-white font-bold py-3.5 rounded-2xl">ยืนยัน</button>`; document.getElementById('confirmBtn').onclick = () => { closeAppModal(); onConfirm(); }; } modal.classList.remove('hidden'); setTimeout(() => modal.classList.remove('opacity-0'), 10); }
-        function closeAppModal() { const modal = document.getElementById('customModal'); modal.classList.add('opacity-0'); setTimeout(() => modal.classList.add('hidden'), 300); }
-        function openSettingsModal() { const modal = document.getElementById('settingsModal'); modal.classList.remove('hidden'); setTimeout(() => modal.classList.remove('opacity-0'), 10); }
-        function closeSettingsModal() { const modal = document.getElementById('settingsModal'); modal.classList.add('opacity-0'); setTimeout(() => modal.classList.add('hidden'), 300); }
-        function openLeaveModal() { const modal = document.getElementById('leaveModal'); modal.classList.remove('hidden'); setTimeout(() => modal.classList.remove('opacity-0'), 10); }
-        function closeLeaveModal() { const modal = document.getElementById('leaveModal'); modal.classList.add('opacity-0'); setTimeout(() => modal.classList.add('hidden'), 300); }
-        function showSuccessToast() { if ("vibrate" in navigator) navigator.vibrate([50, 50]); const toast = document.getElementById('successToast'); toast.classList.remove('opacity-0', '-translate-y-10'); setTimeout(() => toast.classList.add('opacity-0', '-translate-y-10'), 3000); }
-
-        function submitLeave() {
-            const type = document.getElementById('leaveTypeInput').value; const reason = document.getElementById('leaveReasonInput').value.trim();
-            if (!reason) return alert("กรุณาระบุเหตุผลด้วยครับ"); const now = new Date();
-            const newLog = { id: now.getTime(), date: now.toLocaleDateString('th-TH'), time: now.toLocaleTimeString('th-TH', { hour12: false }), type: 'ลางาน', status: type, note: reason, photo: '', empId: userProfile.id, empName: userProfile.name, isSynced: navigator.onLine };
-            logs.unshift(newLog); localStorage.setItem('timeLogs', JSON.stringify(logs));
-            closeLeaveModal(); document.getElementById('leaveReasonInput').value = ''; renderLogs(); document.getElementById('toastMsg').innerText = "ส่งคำขอลาสำเร็จ"; showSuccessToast();
-        }
-
-        function exportCSV() {
-            if (logs.length === 0) return showAppModal('แจ้งเตือน', 'ไม่มีข้อมูลให้ดาวน์โหลด', 'ℹ️', 'alert');
-            let csvContent = "data:text/csv;charset=utf-8,\uFEFFรหัส,ชื่อ,วันที่,เวลา,ประเภท,สถานะ/ระยะเวลา,สถานะSync,หมายเหตุ\n"; 
-            logs.forEach(log => { csvContent += `${log.empId},${log.empName},${log.date},${log.time},${log.type},${log.type === 'ลางาน' ? log.status : (log.statusBadge || log.workDuration || "-")},${log.isSynced ? 'Synced' : 'Pending'},"${(log.note || "-").replace(/"/g, '""')}"\n`; });
-            const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvContent)); link.setAttribute("download", `ลงเวลา_${userProfile?.name}.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link);
-        }
-
-        // Start
-        initApp();
+        // เริ่มต้นระบบ
+        initAdminApp();
     </script>
 </body>
 </html>
