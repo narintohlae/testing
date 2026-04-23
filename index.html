@@ -170,6 +170,11 @@
         };
         function t(str) { return (state.lang === 'th' && i18n_th[str]) ? i18n_th[str] : str; }
 
+        // Production ID Generator
+        function generateId() {
+            return window.crypto && window.crypto.randomUUID ? window.crypto.randomUUID() : Math.random().toString(36).substring(2, 15);
+        }
+
         // =========================================
         // APP STATE & FIREBASE SETUP
         // =========================================
@@ -186,7 +191,7 @@
         const APP_ID = firebaseConfig.appId.replace(/:/g, '-');
 
         const state = {
-            lang: 'en', currentUser: null, currentView: 'login', currentModuleId: null, isInitialized: false,
+            lang: 'en', currentUser: null, currentView: 'login', currentModuleId: null, isInitialized: false, configDocId: null,
             features: {
                 timeClock: true, taskManager: true, timeOff: true, announcements: true, expenses: true, kudos: true, moodTracker: true, helpDesk: true, suggestions: true, polls: true, events: true, directory: true, goals: true, resources: true, bookings: true, visitors: true, cafeteria: true, equipment: true, rewards: true, lostFound: true, shiftSwap: true, carpool: true, wellness: true, jukebox: true, standups: true, marketplace: true, celebrations: true, training: true, workLocation: true, referrals: true
             }
@@ -202,7 +207,7 @@
         };
 
         // Initialize Dynamic Collections
-        const dynamicCollections = ['logs', 'tasks', 'timeOffRequests', 'announcements', 'expenses', 'kudos', 'moods', 'tickets', 'suggestions', 'polls', 'events', 'goals', 'resources', 'bookings', 'visitors', 'menuItems', 'lunchOrders', 'inventory', 'loans', 'userPoints', 'rewardItems', 'redemptions', 'lostFound', 'shifts', 'carpools', 'wellness', 'jukebox', 'standups', 'marketplace', 'celebrations', 'courses', 'trainingLogs', 'workLocations', 'openRoles', 'referrals'];
+        const dynamicCollections = ['appConfig', 'logs', 'tasks', 'timeOffRequests', 'announcements', 'expenses', 'kudos', 'moods', 'tickets', 'suggestions', 'polls', 'events', 'goals', 'resources', 'bookings', 'visitors', 'menuItems', 'lunchOrders', 'inventory', 'loans', 'userPoints', 'rewardItems', 'redemptions', 'lostFound', 'shifts', 'carpools', 'wellness', 'jukebox', 'standups', 'marketplace', 'celebrations', 'courses', 'trainingLogs', 'workLocations', 'openRoles', 'referrals'];
         dynamicCollections.forEach(c => db[c] = []);
 
         // Database Interface
@@ -218,7 +223,7 @@
             init: function() {
                 this.showLoader(1000);
                 
-                // Dynamically import Firebase to keep Global scope clean for onclick handlers
+                // Dynamically import Firebase to keep Global scope clean
                 import("https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js").then((appMod) => {
                     import("https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js").then((authMod) => {
                         import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js").then((fsMod) => {
@@ -241,6 +246,13 @@
                                 dynamicCollections.forEach(c => {
                                     fsMod.onSnapshot(getColl(c), (snap) => {
                                         db[c] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                                        
+                                        // Update Global App Configuration Sync
+                                        if (c === 'appConfig' && db.appConfig.length > 0) {
+                                            state.features = db.appConfig[0].features || state.features;
+                                            state.configDocId = db.appConfig[0].id;
+                                        }
+
                                         loaded++;
                                         
                                         // Initial load handler
@@ -249,9 +261,9 @@
                                             App.renderLogin();
                                             App.seedDataIfNeeded();
                                         } 
-                                        // Realtime UI updates
+                                        // Realtime UI updates for ALL devices connected (Passing false prevents loader flash)
                                         else if (state.isInitialized && state.currentView !== 'login') {
-                                            App.navigate(state.currentView, state.currentModuleId);
+                                            App.navigate(state.currentView, state.currentModuleId, false);
                                         }
                                     }, (err) => console.error(`Sync error on ${c}:`, err));
                                 });
@@ -265,8 +277,9 @@
                 });
             },
             seedDataIfNeeded: async function() {
-                // Auto-populate reference tables if empty on first boot
+                // Auto-populate reference tables and global settings if empty on first boot
                 const toSeed = [
+                    { coll: 'appConfig', data: [ { type: 'global', features: state.features } ] },
                     { coll: 'inventory', data: [ { name: 'MacBook Charger', icon: 'ph-plug', total: 5, available: 5 }, { name: 'Projector', icon: 'ph-projector-screen', total: 2, available: 2 } ] },
                     { coll: 'menuItems', data: [ { name: 'Pad Thai / ผัดไทย', emoji: '🍜' }, { name: 'Chicken Rice / ข้าวมันไก่', emoji: '🍗' } ] },
                     { coll: 'rewardItems', data: [ { name: 'Coffee Gift Card', cost: 500, icon: 'ph-coffee', color: 'text-amber-600' }, { name: 'Company Hoodie', cost: 1200, icon: 'ph-t-shirt', color: 'text-purple-600' } ] },
@@ -286,7 +299,7 @@
             toggleLang: function() {
                 state.lang = state.lang === 'en' ? 'th' : 'en';
                 document.getElementById('lang-toggle').innerText = state.lang === 'en' ? 'EN' : 'TH';
-                this.navigate(state.currentView, state.currentModuleId);
+                this.navigate(state.currentView, state.currentModuleId, false);
             },
             showToast: function(message, type = 'success') {
                 const container = document.getElementById('toast-container');
@@ -322,8 +335,9 @@
                 document.getElementById('app-nav').classList.add('hidden');
                 this.navigate('login');
             },
-            navigate: async function(view, moduleId = null) {
-                if (state.currentView !== view && view !== 'login') await this.showLoader(150);
+            navigate: async function(view, moduleId = null, showLoad = true) {
+                if (showLoad && state.currentView !== view && view !== 'login') await this.showLoader(150);
+                
                 state.currentView = view; state.currentModuleId = moduleId;
                 const content = document.getElementById('app-content'); content.innerHTML = ''; content.scrollTop = 0;
                 
@@ -403,7 +417,20 @@
                 html += `<div class="mt-8"><button onclick="App.logout()" class="btn-3d w-full py-4 bg-white text-red-500 border border-red-100 flex justify-center items-center gap-2 hover:bg-red-50"><i class="ph-bold ph-sign-out text-lg"></i> ${t("Switch User Profile")}</button></div></div>`;
                 document.getElementById('app-content').innerHTML = html;
             },
-            toggleFeature: function(moduleId, isEnabled) { state.features[moduleId] = isEnabled; this.renderNav(); if(state.currentView === 'owner_dashboard') this.renderOwnerDashboard(); this.showToast(t("Action completed successfully")); },
+            toggleFeature: function(moduleId, isEnabled) { 
+                state.features[moduleId] = isEnabled; 
+                
+                // Save the new App Config to Firebase to sync across all devices
+                if(state.configDocId) {
+                    DB.update('appConfig', state.configDocId, { features: state.features });
+                } else {
+                    DB.add('appConfig', { type: 'global', features: state.features });
+                }
+                
+                this.renderNav(); 
+                if(state.currentView === 'owner_dashboard') this.renderOwnerDashboard(); 
+                this.showToast(t("Action completed successfully")); 
+            },
             renderNav: function() {
                 const nav = document.getElementById('app-nav'); if (!state.currentUser) return; nav.classList.remove('hidden'); let html = '';
                 const createNavItem = (icon, label, targetView, targetModule, isActive) => `<button onclick="App.navigate('${targetView}'${targetModule ? `,'${targetModule}'` : ''})" class="flex flex-col items-center justify-center p-2 min-w-[64px] flex-shrink-0 transition-all ${isActive ? 'text-blue-600 transform -translate-y-1' : 'text-gray-400 hover:text-gray-600'}"><div class="relative"><i class="${isActive ? 'ph-fill' : 'ph'} ${icon} text-[26px] mb-1"></i>${isActive ? '<div class="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-1 h-1 bg-blue-600 rounded-full"></div>' : ''}</div><span class="text-[10px] font-bold mt-1">${t(label)}</span></button>`;
