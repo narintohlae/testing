@@ -46,8 +46,11 @@
         .iso-btn:disabled {
             opacity: 0.5;
             cursor: not-allowed;
+            background-color: #d1d5db !important; /* gray-300 */
+            color: #6b7280 !important; /* gray-500 */
             transform: translate(4px, 4px);
             box-shadow: 0px 0px 0px #111827;
+            border-color: #9ca3af;
         }
 
         .iso-btn-primary { background-color: #3b82f6; color: white; }
@@ -114,7 +117,6 @@
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         
-        /* Custom Scrollbar for tabs */
         .tabs-container::-webkit-scrollbar { height: 4px; }
         .tabs-container::-webkit-scrollbar-track { background: transparent; }
         .tabs-container::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
@@ -124,7 +126,6 @@
 
     <!-- App Container -->
     <div id="app" class="flex-grow flex flex-col w-full max-w-md mx-auto relative p-4 pb-20">
-        <!-- Content will be injected here by JS -->
         <div class="flex items-center justify-center h-full mt-20">
             <div class="flex flex-col items-center">
                 <div class="loader mb-4"></div>
@@ -138,9 +139,7 @@
         <div class="iso-card w-full max-w-sm p-6 transform scale-95 transition-transform duration-200" id="modal-content-box">
             <h3 id="modal-title" class="text-xl font-bold mb-2">แจ้งเตือน</h3>
             <p id="modal-message" class="text-gray-600 mb-6 whitespace-pre-wrap"></p>
-            <div id="modal-buttons" class="flex justify-end gap-3">
-                <!-- Buttons injected dynamically -->
-            </div>
+            <div id="modal-buttons" class="flex justify-end gap-3"></div>
         </div>
     </div>
 
@@ -187,7 +186,9 @@
         let activeEmployee = null; 
         
         let empTab = 'time'; 
-        let ownerTab = 'logs'; // logs, reqs, emps, payroll, settings
+        let ownerTab = 'logs';
+        let isProcessing = false; // ป้องกัน Human Error: กดปุ่มเบิ้ลรัวๆ
+        let localAuthState = null;
         
         // Data Collections
         let employees = [];
@@ -197,10 +198,9 @@
             ownerPin: '9999',
             requireGPS: true,
             requireSelfie: true,
-            standardHours: 8 // ชั่วโมงทำงานปกติต่อวัน
+            standardHours: 8
         };
 
-        // DOM Elements
         const appDiv = document.getElementById('app');
         
         // --- Modal System ---
@@ -234,6 +234,18 @@
             setTimeout(() => modal.classList.add('hidden'), 200);
         }
 
+        // --- Check Time Logic (Human Error Prevention) ---
+        function getEmpLogStatusToday(empId) {
+            const todayStart = new Date();
+            todayStart.setHours(0, 0, 0, 0);
+            
+            // ดึงข้อมูล log ของคนนี้เฉพาะวันนี้ เรียงจากล่าสุดไปเก่า (มี .sort() ไว้แล้วใน onSnapshot)
+            const logsToday = timelogs.filter(log => log.empId === empId && log.timestamp >= todayStart.getTime());
+            
+            if (logsToday.length === 0) return 'NONE'; // ยังไม่เคยลงเวลาวันนี้
+            return logsToday[0].type; // ส่งค่าล่าสุดกลับไป ('IN' หรือ 'OUT')
+        }
+
         // --- Firebase Data Fetching ---
         function setupRealtimeListeners() {
             if (!currentUser) return;
@@ -248,14 +260,14 @@
             onSnapshot(collection(db, baseCollectionPath, 'employees'), (snapshot) => {
                 employees = [];
                 snapshot.forEach(doc => employees.push({ id: doc.id, ...doc.data() }));
-                attemptAutoLogin(); // ตรวจสอบออโต้ล็อกอินทุกครั้งที่โหลดข้อมูลพนักงานเสร็จ
+                attemptAutoLogin();
                 render();
             });
 
             onSnapshot(collection(db, baseCollectionPath, 'timelogs'), (snapshot) => {
                 timelogs = [];
                 snapshot.forEach(doc => timelogs.push({ id: doc.id, ...doc.data() }));
-                timelogs.sort((a, b) => b.timestamp - a.timestamp); // DESC for view
+                timelogs.sort((a, b) => b.timestamp - a.timestamp);
                 render();
             });
 
@@ -267,11 +279,8 @@
             });
         }
 
-        let localAuthState = null; // เก็บสถานะการล็อกอินของเครื่องนี้
-
         function attemptAutoLogin() {
             if (!localAuthState) return;
-            // ทำงานเฉพาะตอนอยู่หน้าแรก
             if (currentView === 'role-select') {
                 if (localAuthState.role === 'owner') {
                     currentView = 'owner-dash';
@@ -279,11 +288,7 @@
                 } else if (localAuthState.role === 'employee' && employees.length > 0) {
                     const emp = employees.find(e => e.id === localAuthState.empId);
                     if (emp) {
-                        activeEmployee = emp;
-                        empTab = 'time';
-                        currentView = 'emp-dash';
-                        startClock();
-                        render();
+                        activeEmployee = emp; empTab = 'time'; currentView = 'emp-dash'; startClock(); render();
                     }
                 }
             }
@@ -305,14 +310,9 @@
         onAuthStateChanged(auth, (user) => {
             currentUser = user;
             if (user) {
-                // ดึงข้อมูลการจดจำล็อกอินของเครื่องนี้ (จำลองจาก Anonymous UID)
                 onSnapshot(doc(db, `artifacts/${appId}/users/${user.uid}/config`, 'session'), (snap) => {
-                    if (snap.exists()) {
-                        localAuthState = snap.data();
-                        attemptAutoLogin();
-                    } else {
-                        localAuthState = null;
-                    }
+                    if (snap.exists()) { localAuthState = snap.data(); attemptAutoLogin(); } 
+                    else localAuthState = null;
                 });
                 setupRealtimeListeners();
             }
@@ -320,29 +320,25 @@
         });
         initAuth();
 
-        // --- Utility Functions ---
+        // --- Utility ---
         function formatDate(timestamp) {
             if (!timestamp) return '-';
             const d = new Date(timestamp);
             return d.toLocaleDateString('th-TH', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' + 
                    d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
         }
-        
         function formatJustDate(dateStr) {
             if(!dateStr) return '-';
             return new Date(dateStr).toLocaleDateString('th-TH', { day: '2-digit', month: 'short', year: 'numeric' });
         }
-
         function formatCurrency(amount) {
             return parseFloat(amount).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         }
 
-        // --- Payroll Calculation ---
+        // --- Payroll ---
         function calculatePayroll() {
             let shifts = [];
             let empActiveIn = {}; 
-            
-            // Sort ASC for chronological pairing
             let sortedLogs = [...timelogs].sort((a, b) => a.timestamp - b.timestamp);
 
             sortedLogs.forEach(log => {
@@ -352,28 +348,18 @@
                     if (empActiveIn[log.empId]) {
                         let inLog = empActiveIn[log.empId];
                         let durationHrs = (log.timestamp - inLog.timestamp) / (1000 * 60 * 60);
-                        
-                        shifts.push({
-                            empId: log.empId,
-                            durationHrs: durationHrs
-                        });
-                        delete empActiveIn[log.empId]; // clear paired IN
+                        shifts.push({ empId: log.empId, durationHrs: durationHrs });
+                        delete empActiveIn[log.empId];
                     }
                 }
             });
 
-            // Aggregate by employee
             let payrollSummary = {};
             employees.forEach(emp => {
                 payrollSummary[emp.id] = {
-                    name: emp.name,
-                    wageType: emp.wageType || 'daily',
-                    baseRate: parseFloat(emp.baseRate) || 0,
-                    otRate: parseFloat(emp.otRate) || 0,
-                    totalRegHrs: 0,
-                    totalOTHrs: 0,
-                    totalPay: 0,
-                    shiftsCount: 0
+                    name: emp.name, wageType: emp.wageType || 'daily',
+                    baseRate: parseFloat(emp.baseRate) || 0, otRate: parseFloat(emp.otRate) || 0,
+                    totalRegHrs: 0, totalOTHrs: 0, totalPay: 0, shiftsCount: 0
                 };
             });
 
@@ -381,29 +367,20 @@
 
             shifts.forEach(shift => {
                 if (!payrollSummary[shift.empId]) return;
-
                 let summary = payrollSummary[shift.empId];
                 let regHrs = Math.min(shift.durationHrs, stdHrs);
                 let otHrs = Math.max(0, shift.durationHrs - stdHrs);
 
-                summary.totalRegHrs += regHrs;
-                summary.totalOTHrs += otHrs;
-                summary.shiftsCount++;
+                summary.totalRegHrs += regHrs; summary.totalOTHrs += otHrs; summary.shiftsCount++;
 
                 let shiftBasePay = 0;
-                if (summary.wageType === 'hourly') {
-                    shiftBasePay = regHrs * summary.baseRate;
-                } else if (summary.wageType === 'daily') {
-                    shiftBasePay = summary.baseRate;
-                }
-                // ถ้าเป็นรายสัปดาห์ จะยังไม่บวกเงินรายวันตรงนี้ แต่จะไปบวกเหมาจ่ายทีหลัง
+                if (summary.wageType === 'hourly') shiftBasePay = regHrs * summary.baseRate;
+                else if (summary.wageType === 'daily') shiftBasePay = summary.baseRate;
                 
                 let shiftOTPay = otHrs * summary.otRate;
-
                 summary.totalPay += (shiftBasePay + shiftOTPay);
             });
 
-            // เพิ่มค่าแรงเหมาจ่ายสำหรับพนักงานรายสัปดาห์ (ให้ครั้งเดียวถ้ายอดกะทำงาน > 0)
             Object.keys(payrollSummary).forEach(id => {
                 if (payrollSummary[id].wageType === 'weekly' && payrollSummary[id].shiftsCount > 0) {
                     payrollSummary[id].totalPay += payrollSummary[id].baseRate;
@@ -413,47 +390,38 @@
             return payrollSummary;
         }
 
-        // --- Camera & GPS Actions ---
+        // --- Camera & GPS ---
         let videoStream = null;
         async function captureSelfie() {
             return new Promise((resolve, reject) => {
                 const modal = document.getElementById('camera-modal');
                 const video = document.getElementById('camera-video');
                 const canvas = document.getElementById('camera-canvas');
-                const btnCancel = document.getElementById('btn-cancel-camera');
                 const btnTake = document.getElementById('btn-take-photo');
-                const statusTxt = document.getElementById('camera-status');
 
                 modal.classList.remove('hidden');
                 setTimeout(() => modal.classList.remove('opacity-0'), 10);
-                statusTxt.innerText = "กำลังเปิดกล้อง...";
+                document.getElementById('camera-status').innerText = "กำลังเปิดกล้อง...";
                 btnTake.disabled = true;
 
                 navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false })
                     .then(stream => {
-                        videoStream = stream;
-                        video.srcObject = stream;
-                        video.play();
-                        statusTxt.innerText = "กรุณามองกล้องและจัดใบหน้าให้อยู่ในกรอบ";
+                        videoStream = stream; video.srcObject = stream; video.play();
+                        document.getElementById('camera-status').innerText = "กรุณามองกล้องและจัดใบหน้าให้อยู่ในกรอบ";
                         btnTake.disabled = false;
                     })
-                    .catch(err => {
-                        closeCamera();
-                        reject(new Error("ไม่สามารถเข้าถึงกล้องได้"));
-                    });
+                    .catch(err => { closeCamera(); reject(new Error("ไม่สามารถเข้าถึงกล้องได้")); });
 
                 btnTake.onclick = () => {
                     const context = canvas.getContext('2d');
-                    canvas.width = 300;
-                    canvas.height = (video.videoHeight / video.videoWidth) * 300;
+                    canvas.width = 300; canvas.height = (video.videoHeight / video.videoWidth) * 300;
                     context.drawImage(video, 0, 0, canvas.width, canvas.height);
                     resolve(canvas.toDataURL('image/jpeg', 0.6));
                     closeCamera();
                 };
 
-                btnCancel.onclick = () => {
-                    closeCamera();
-                    reject(new Error("ยกเลิกการถ่ายรูป"));
+                document.getElementById('btn-cancel-camera').onclick = () => {
+                    closeCamera(); reject(new Error("ยกเลิกการถ่ายรูป"));
                 };
             });
         }
@@ -462,10 +430,7 @@
             const modal = document.getElementById('camera-modal');
             modal.classList.add('opacity-0');
             setTimeout(() => modal.classList.add('hidden'), 200);
-            if (videoStream) {
-                videoStream.getTracks().forEach(track => track.stop());
-                videoStream = null;
-            }
+            if (videoStream) { videoStream.getTracks().forEach(track => track.stop()); videoStream = null; }
         }
 
         async function getLocation() {
@@ -473,7 +438,7 @@
                 if (!navigator.geolocation) reject(new Error("ไม่รองรับ GPS"));
                 navigator.geolocation.getCurrentPosition(
                     (position) => resolve({ lat: position.coords.latitude, lng: position.coords.longitude }),
-                    (error) => reject(new Error("ไม่สามารถระบุตำแหน่งได้")),
+                    (error) => reject(new Error("ไม่สามารถระบุตำแหน่งได้ กรุณาอนุญาตให้ระบบเข้าถึงพิกัด")),
                     { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
                 );
             });
@@ -481,8 +446,20 @@
 
         // --- Core Functions ---
         async function processTimeLog(type) {
-            if (!activeEmployee) return;
+            if (!activeEmployee || isProcessing) return;
+            
+            // 1. Human Error Prevention: ป้องกันการกดลงเวลาผิดประเภท
+            const statusToday = getEmpLogStatusToday(activeEmployee.id);
+            if (type === 'IN' && statusToday === 'IN') {
+                return showModal('แจ้งเตือน', 'คุณได้ทำการ "เข้างาน" ไปแล้ว\nกรุณาทำรายการ "ออกงาน" แทนครับ');
+            }
+            if (type === 'OUT' && (statusToday === 'OUT' || statusToday === 'NONE')) {
+                return showModal('แจ้งเตือน', 'คุณยังไม่ได้ลงเวลา "เข้างาน"\nหรือไม่ก็กด "ออกงาน" ไปแล้วครับ');
+            }
+
+            isProcessing = true; // ล็อกปุ่ม
             let photoData = null, locationData = null;
+            
             try {
                 if (appSettings.requireSelfie) photoData = await captureSelfie();
                 if (appSettings.requireGPS) {
@@ -502,24 +479,35 @@
                 showModal('สำเร็จ!', `บันทึกเวลา${type === 'IN' ? 'เข้า' : 'ออก'}งานเรียบร้อยแล้ว`, [
                     { text: 'ตกลง', type: 'success', action: () => {
                         closeModal();
+                        isProcessing = false;
                         activeEmployee = null; 
                         changeView('role-select');
                     }}
                 ]);
             } catch (error) {
                 closeModal();
+                isProcessing = false;
                 showModal('ข้อผิดพลาด', error.message);
             }
         }
 
-        window.submitLeaveRequest = async () => { /* ... */ 
+        window.submitLeaveRequest = async () => {
+            if (isProcessing) return;
+
             const reqType = document.getElementById('req-type').value;
             const startDate = document.getElementById('req-start').value;
             const endDate = document.getElementById('req-end').value;
             const detail = document.getElementById('req-detail').value.trim();
 
+            // Validation พื้นฐาน
             if(!reqType || !startDate || !endDate || !detail) return showModal('แจ้งเตือน', 'กรุณากรอกข้อมูลให้ครบถ้วน');
 
+            // 2. Human Error Prevention: ป้องกันการใส่วันที่ผิด (ลาติดลบ)
+            if (new Date(endDate) < new Date(startDate)) {
+                return showModal('ข้อมูลไม่ถูกต้อง', 'วันที่สิ้นสุดการลา ต้องไม่น้อยกว่าวันที่เริ่มต้นครับ');
+            }
+
+            isProcessing = true;
             try {
                 showModal('กำลังบันทึก', 'กำลังส่งคำขอ...', []);
                 await addDoc(collection(db, `artifacts/${appId}/public/data`, 'requests'), {
@@ -530,18 +518,26 @@
                 closeModal();
                 showModal('สำเร็จ', 'ส่งคำขอเรียบร้อยแล้ว รอการอนุมัติ');
                 document.getElementById('req-detail').value = '';
+                document.getElementById('req-start').value = '';
+                document.getElementById('req-end').value = '';
+                document.getElementById('req-type').value = '';
             } catch(e) {
                 closeModal();
                 showModal('ผิดพลาด', 'ไม่สามารถส่งคำขอได้');
+            } finally {
+                isProcessing = false;
             }
         };
 
         window.updateRequestStatus = async (reqId, newStatus) => {
+            if(isProcessing) return;
+            isProcessing = true;
             try {
                 showModal('กำลังดำเนินการ', 'กำลังอัปเดตสถานะ...', []);
                 await updateDoc(doc(db, `artifacts/${appId}/public/data/requests`, reqId), { status: newStatus });
                 closeModal();
             } catch(e) { closeModal(); showModal('ผิดพลาด', 'ไม่สามารถอัปเดตได้'); }
+            finally { isProcessing = false; }
         };
 
         // --- Render Views ---
@@ -608,20 +604,26 @@
         function renderEmpDash() {
             if (!activeEmployee) return renderRoleSelect();
             
+            // เช็คสถานะการลงเวลาวันนี้ เพื่ออัปเดต UI ปุ่ม
+            const statusToday = getEmpLogStatusToday(activeEmployee.id);
+            const canIn = (statusToday !== 'IN');
+            const canOut = (statusToday === 'IN');
+
             let tabContent = '';
             if (empTab === 'time') {
                 tabContent = `
                     <div class="iso-card p-6 text-center flex-grow flex flex-col justify-center gap-6 mb-6 bg-blue-50">
                         <div class="text-5xl font-black text-gray-800 mb-4" id="live-clock">--:--</div>
                         <div class="grid grid-cols-2 gap-4">
-                            <button id="btn-clock-in" class="iso-btn iso-btn-success py-8 text-xl flex flex-col items-center gap-2">
+                            <button id="btn-clock-in" class="iso-btn iso-btn-success py-8 text-xl flex flex-col items-center gap-2" ${!canIn ? 'disabled' : ''}>
                                 <i class="fas fa-sign-in-alt text-3xl"></i> เข้างาน
                             </button>
-                            <button id="btn-clock-out" class="iso-btn iso-btn-danger py-8 text-xl flex flex-col items-center gap-2">
+                            <button id="btn-clock-out" class="iso-btn iso-btn-danger py-8 text-xl flex flex-col items-center gap-2" ${!canOut ? 'disabled' : ''}>
                                 <i class="fas fa-sign-out-alt text-3xl"></i> ออกงาน
                             </button>
                         </div>
-                        <div class="flex justify-center gap-4 mt-4 text-sm font-medium">
+                        <p class="text-xs text-gray-500 mt-2">${statusToday === 'IN' ? '*คุณอยู่ในสถานะเข้างานแล้ว' : statusToday === 'OUT' ? '*คุณได้ลงเวลาออกงานแล้ว' : ''}</p>
+                        <div class="flex justify-center gap-4 mt-2 text-sm font-medium">
                             <span class="${appSettings.requireGPS ? 'text-green-600' : 'text-gray-400'}"><i class="fas fa-map-marker-alt"></i> GPS</span>
                             <span class="${appSettings.requireSelfie ? 'text-green-600' : 'text-gray-400'}"><i class="fas fa-camera"></i> รูป</span>
                         </div>
@@ -633,7 +635,7 @@
                     <div class="space-y-4">
                         <div class="iso-card p-4 bg-yellow-50 border-yellow-600">
                             <h3 class="font-bold mb-3 border-b border-yellow-200 pb-2"><i class="fas fa-paper-plane"></i> ส่งคำขอใหม่</h3>
-                            <select id="req-type" class="iso-input mb-3 bg-white">
+                            <select id="req-type" class="iso-input mb-3 bg-white text-sm">
                                 <option value="">-- เลือกประเภทคำขอ --</option>
                                 <option value="ลาป่วย">ลาป่วย</option>
                                 <option value="ลากิจ">ลากิจ</option>
@@ -648,6 +650,7 @@
                             <button onclick="submitLeaveRequest()" class="iso-btn iso-btn-warning w-full py-2">ส่งคำขอ</button>
                         </div>
                         <h3 class="font-bold mt-4">ประวัติคำขอ</h3>
+                        ${myReqs.length === 0 ? '<p class="text-sm text-gray-500">ไม่มีประวัติ</p>':''}
                         ${myReqs.map(r => `
                             <div class="iso-card p-3 text-sm">
                                 <div class="flex justify-between font-bold mb-1">
@@ -773,6 +776,7 @@
                 tabContent = `
                     <div class="space-y-4">
                         <h3 class="font-bold text-lg border-b-2 pb-2 text-yellow-600">คำขอรอตรวจสอบ</h3>
+                        ${pendingReqs.length === 0 ? '<p class="text-sm text-gray-500">ไม่มีคำขอค้าง</p>':''}
                         ${pendingReqs.map(r => `
                             <div class="iso-card p-4 bg-yellow-50 border-yellow-600">
                                 <div class="flex justify-between mb-2"><span class="font-black text-lg">${r.empName}</span><span class="font-bold text-yellow-700">${r.type}</span></div>
@@ -801,7 +805,6 @@
                             <button id="btn-add-emp" class="iso-btn iso-btn-primary px-3 py-1 text-sm"><i class="fas fa-plus"></i> เพิ่มพนักงาน</button>
                         </div>
                         
-                        <!-- ฟอร์มเพิ่มพนักงาน -->
                         <div id="add-emp-form" class="iso-card p-4 hidden bg-blue-50 border-blue-800 transition-all">
                             <h4 class="font-bold mb-3 text-blue-800 border-b border-blue-200 pb-1">เพิ่มพนักงานใหม่</h4>
                             <input type="text" id="new-emp-name" placeholder="ชื่อพนักงาน" class="iso-input mb-3 text-sm">
@@ -812,14 +815,8 @@
                                 <option value="weekly">รับค่าแรง: แบบรายสัปดาห์</option>
                             </select>
                             <div class="flex gap-2 mb-3">
-                                <div class="flex-1">
-                                    <label class="text-xs text-gray-600 font-bold">เรทปกติ (บาท)</label>
-                                    <input type="number" id="new-emp-base" placeholder="เช่น 350" class="iso-input text-sm">
-                                </div>
-                                <div class="flex-1">
-                                    <label class="text-xs text-gray-600 font-bold">เรท OT (บาท/ชม.)</label>
-                                    <input type="number" id="new-emp-ot" placeholder="เช่น 50" class="iso-input text-sm">
-                                </div>
+                                <div class="flex-1"><label class="text-xs text-gray-600 font-bold">เรทปกติ (บาท)</label><input type="number" id="new-emp-base" placeholder="เช่น 350" class="iso-input text-sm"></div>
+                                <div class="flex-1"><label class="text-xs text-gray-600 font-bold">เรท OT (บาท/ชม.)</label><input type="number" id="new-emp-ot" placeholder="เช่น 50" class="iso-input text-sm"></div>
                             </div>
                             <div class="flex gap-2">
                                 <button id="save-new-emp" class="iso-btn iso-btn-success flex-1 py-2">บันทึก</button>
@@ -827,7 +824,6 @@
                             </div>
                         </div>
 
-                        <!-- ฟอร์มแก้ไขพนักงาน -->
                         <div id="edit-emp-form" class="iso-card p-4 hidden bg-yellow-50 border-yellow-600 transition-all">
                             <h4 class="font-bold mb-3 text-yellow-800 border-b border-yellow-200 pb-1">แก้ไขข้อมูลพนักงาน</h4>
                             <input type="hidden" id="edit-emp-id">
@@ -839,14 +835,8 @@
                                 <option value="weekly">รับค่าแรง: แบบรายสัปดาห์</option>
                             </select>
                             <div class="flex gap-2 mb-3">
-                                <div class="flex-1">
-                                    <label class="text-xs text-gray-600 font-bold">เรทปกติ (บาท)</label>
-                                    <input type="number" id="edit-emp-base" placeholder="เช่น 350" class="iso-input text-sm">
-                                </div>
-                                <div class="flex-1">
-                                    <label class="text-xs text-gray-600 font-bold">เรท OT (บาท/ชม.)</label>
-                                    <input type="number" id="edit-emp-ot" placeholder="เช่น 50" class="iso-input text-sm">
-                                </div>
+                                <div class="flex-1"><label class="text-xs text-gray-600 font-bold">เรทปกติ (บาท)</label><input type="number" id="edit-emp-base" placeholder="เช่น 350" class="iso-input text-sm"></div>
+                                <div class="flex-1"><label class="text-xs text-gray-600 font-bold">เรท OT (บาท/ชม.)</label><input type="number" id="edit-emp-ot" placeholder="เช่น 50" class="iso-input text-sm"></div>
                             </div>
                             <div class="flex gap-2">
                                 <button id="save-edit-emp" class="iso-btn iso-btn-success flex-1 py-2">บันทึกการแก้ไข</button>
@@ -854,7 +844,6 @@
                             </div>
                         </div>
 
-                        <!-- รายชื่อพนักงาน -->
                         ${employees.map(emp => `
                             <div class="iso-card p-3 flex justify-between items-center">
                                 <div class="flex-grow">
@@ -866,9 +855,7 @@
                                     </div>
                                 </div>
                                 <div class="flex gap-1 flex-shrink-0 ml-2">
-                                    <!-- ปุ่มแก้ไข (ดินสอ) -->
                                     <button data-edit-emp="${emp.id}" class="iso-btn iso-btn-warning w-8 h-8 p-0 text-sm"><i class="fas fa-edit"></i></button>
-                                    <!-- ปุ่มลบ (ถังขยะ) -->
                                     <button data-delete-emp="${emp.id}" class="iso-btn iso-btn-danger w-8 h-8 p-0 text-sm"><i class="fas fa-trash"></i></button>
                                 </div>
                             </div>
@@ -899,7 +886,8 @@
                         </div>
                         <div class="iso-card p-4 bg-red-50 border-red-800">
                             <h4 class="font-bold mb-4 border-b border-red-200 pb-2 text-red-800">เปลี่ยนรหัส Owner</h4>
-                            <input type="text" id="new-owner-pin" placeholder="รหัสผ่านใหม่ 4 หลักขึ้นไป" class="iso-input mb-3" inputmode="numeric">
+                            <input type="password" id="new-owner-pin" placeholder="รหัสผ่านใหม่ (4 หลักขึ้นไป)" class="iso-input mb-3 text-center tracking-widest text-lg" inputmode="numeric">
+                            <input type="password" id="confirm-owner-pin" placeholder="ยืนยันรหัสผ่านใหม่อีกครั้ง" class="iso-input mb-3 text-center tracking-widest text-lg" inputmode="numeric">
                             <button id="btn-save-owner-pin" class="iso-btn iso-btn-danger w-full py-2">บันทึกรหัสใหม่</button>
                         </div>
                     </div>
@@ -913,15 +901,14 @@
                 <div class="flex flex-col h-full mt-2 overflow-hidden">
                     <div class="flex justify-between items-center mb-3">
                         <h2 class="text-xl font-black text-gray-800"><i class="fas fa-cog"></i> ส่วนจัดการร้าน</h2>
-                        <button data-action="go-home" class="iso-btn iso-btn-white px-3 py-1 text-sm"><i class="fas fa-sign-out-alt"></i> ออก</button>
+                        <button data-action="logout" class="iso-btn iso-btn-white px-3 py-1 text-sm"><i class="fas fa-sign-out-alt"></i> ออก</button>
                     </div>
 
-                    <!-- Scrollable Tabs Menu -->
                     <div class="tabs-container flex gap-1 mb-4 bg-gray-200 p-1 rounded-lg border-2 border-gray-900 overflow-x-auto text-sm shrink-0 shadow-inner" style="box-shadow: inset 0 2px 4px 0 rgb(0 0 0 / 0.1);">
                         <button onclick="setOwnerTab('logs')" class="whitespace-nowrap px-3 py-2 font-bold rounded-md transition-colors ${ownerTab === 'logs' ? 'bg-white shadow border border-gray-300 text-black' : 'text-gray-500'}">ลงเวลา</button>
-                        <button onclick="setOwnerTab('payroll')" class="whitespace-nowrap px-3 py-2 font-bold rounded-md transition-colors ${ownerTab === 'payroll' ? 'bg-purple-100 shadow border border-purple-400 text-purple-800' : 'text-gray-500'}">ค่าแรง/OT</button>
+                        <button onclick="setOwnerTab('payroll')" class="whitespace-nowrap px-3 py-2 font-bold rounded-md transition-colors ${ownerTab === 'payroll' ? 'bg-purple-100 shadow border border-purple-400 text-purple-800' : 'text-gray-500'}">ค่าแรง</button>
                         <button onclick="setOwnerTab('reqs')" class="whitespace-nowrap px-3 py-2 font-bold rounded-md transition-colors ${ownerTab === 'reqs' ? 'bg-white shadow border border-gray-300 text-black' : 'text-gray-500'}">คำขอ${badgeHTML}</button>
-                        <button onclick="setOwnerTab('emps')" class="whitespace-nowrap px-3 py-2 font-bold rounded-md transition-colors ${ownerTab === 'emps' ? 'bg-white shadow border border-gray-300 text-black' : 'text-gray-500'}">พนักงาน</button>
+                        <button onclick="setOwnerTab('emps')" class="whitespace-nowrap px-3 py-2 font-bold rounded-md transition-colors ${ownerTab === 'emps' ? 'bg-white shadow border border-gray-300 text-black' : 'text-gray-500'}">พนง.</button>
                         <button onclick="setOwnerTab('settings')" class="whitespace-nowrap px-3 py-2 font-bold rounded-md transition-colors ${ownerTab === 'settings' ? 'bg-white shadow border border-gray-300 text-black' : 'text-gray-500'}">ตั้งค่า</button>
                     </div>
 
@@ -936,41 +923,33 @@
             document.querySelectorAll('[data-action="go-home"]').forEach(el => el.onclick = () => changeView('role-select'));
             
             document.querySelectorAll('[data-action="logout"]').forEach(el => el.onclick = async () => {
-                if (currentUser) {
-                    await deleteDoc(doc(db, `artifacts/${appId}/users/${currentUser.uid}/config`, 'session'));
-                }
+                if (currentUser) await deleteDoc(doc(db, `artifacts/${appId}/users/${currentUser.uid}/config`, 'session'));
                 changeView('role-select');
             });
 
             document.querySelectorAll('[data-action="go-emp-login"]').forEach(el => el.onclick = () => changeView('emp-login'));
             document.querySelectorAll('[data-action="go-owner-login"]').forEach(el => el.onclick = () => changeView('owner-login'));
 
-            // Auto-login for Employee
+            // Auto-login Employee
             const empPinInput = document.getElementById('emp-pin');
             if (empPinInput) {
                 empPinInput.addEventListener('input', async (e) => {
                     const pin = e.target.value;
                     const empSelect = document.getElementById('emp-select');
-                    
-                    // รอจนกว่าจะพิมพ์ครบ 4 หลัก
                     if (pin.length === 4) {
                         const empId = empSelect.value;
                         if (!empId) {
                             showModal('แจ้งเตือน', 'กรุณาเลือกชื่อพนักงานก่อนใส่รหัส');
-                            e.target.value = ''; // เคลียร์รหัส
-                            return;
+                            e.target.value = ''; return;
                         }
-
                         const emp = employees.find(e => e.id === empId);
                         if (emp && emp.pin === pin) {
-                            activeEmployee = emp; 
-                            empTab = 'time'; 
+                            activeEmployee = emp; empTab = 'time'; 
                             await setDoc(doc(db, `artifacts/${appId}/users/${currentUser.uid}/config`, 'session'), { role: 'employee', empId: emp.id });
-                            changeView('emp-dash'); 
-                            startClock();
+                            changeView('emp-dash'); startClock();
                         } else {
                             showModal('รหัสผิดพลาด', 'PIN ไม่ถูกต้อง กรุณาลองใหม่');
-                            e.target.value = ''; // เคลียร์รหัสให้พิมพ์ใหม่
+                            e.target.value = '';
                         }
                     }
                 });
@@ -981,31 +960,26 @@
             if (btnIn) btnIn.onclick = () => processTimeLog('IN');
             if (btnOut) btnOut.onclick = () => processTimeLog('OUT');
 
-            // Auto-login for Owner
+            // Auto-login Owner
             const ownerPinInput = document.getElementById('owner-pin');
             if (ownerPinInput) {
                 ownerPinInput.addEventListener('input', async (e) => {
                     const pin = e.target.value;
-                    
-                    // สมมติฐานว่ารหัสเจ้าของร้านก็มี 4 หลัก (ป้องกันกรณีตั้งยาวกว่านี้ จึงบังคับเช็คที่ 4 หลักก่อน)
                     if (pin.length >= 4) {
                         if (pin === appSettings.ownerPin) {
                             await setDoc(doc(db, `artifacts/${appId}/users/${currentUser.uid}/config`, 'session'), { role: 'owner' });
                             changeView('owner-dash');
                         } else if (pin.length === appSettings.ownerPin.length) {
-                             // เช็คเฉพาะเมื่อความยาวรหัสที่พิมพ์เท่ากับความยาวรหัสที่ตั้งไว้
                              showModal('ปฏิเสธ', 'รหัสไม่ถูกต้อง');
-                             e.target.value = ''; // เคลียร์รหัส
+                             e.target.value = '';
                         }
                     }
                 });
             }
 
-            // --- พนักงาน: เพิ่ม ---
             const btnAddEmp = document.getElementById('btn-add-emp');
             if (btnAddEmp) {
                 btnAddEmp.onclick = () => {
-                    // ปิดฟอร์มแก้ไข (ถ้าเปิดอยู่) แล้วเปิดฟอร์มเพิ่ม
                     document.getElementById('edit-emp-form')?.classList.add('hidden');
                     document.getElementById('add-emp-form').classList.remove('hidden');
                 };
@@ -1014,6 +988,8 @@
             const btnSaveEmp = document.getElementById('save-new-emp');
             if (btnSaveEmp) {
                 btnSaveEmp.onclick = async () => {
+                    if (isProcessing) return;
+                    
                     const name = document.getElementById('new-emp-name').value.trim();
                     const pin = document.getElementById('new-emp-pin').value.trim();
                     const wageType = document.getElementById('new-emp-wage-type').value;
@@ -1022,25 +998,32 @@
 
                     if (!name || pin.length < 4) return showModal('แจ้งเตือน', 'กรอกชื่อและ PIN อย่างน้อย 4 หลัก');
                     
-                    await addDoc(collection(db, `artifacts/${appId}/public/data`, 'employees'), { 
-                        name, pin, wageType, baseRate, otRate 
-                    });
-                    document.getElementById('add-emp-form').classList.add('hidden');
-                    showModal('สำเร็จ', 'เพิ่มข้อมูลพนักงานเรียบร้อย');
+                    // 3. Human Error Prevention: เช็คชื่อซ้ำ
+                    const isDuplicate = employees.some(e => e.name.toLowerCase() === name.toLowerCase());
+                    if (isDuplicate) return showModal('ข้อผิดพลาด', 'มีพนักงานชื่อนี้ในระบบแล้ว กรุณาใส่ชื่ออื่นหรือเพิ่มนามสกุล');
+
+                    isProcessing = true;
+                    try {
+                        await addDoc(collection(db, `artifacts/${appId}/public/data`, 'employees'), { 
+                            name, pin, wageType, baseRate, otRate 
+                        });
+                        document.getElementById('add-emp-form').classList.add('hidden');
+                        showModal('สำเร็จ', 'เพิ่มข้อมูลพนักงานเรียบร้อย');
+                    } catch(e) {
+                        showModal('ผิดพลาด', 'บันทึกไม่สำเร็จ');
+                    } finally {
+                        isProcessing = false;
+                    }
                 };
             }
 
-            // --- พนักงาน: แก้ไข (ใหม่) ---
             document.querySelectorAll('[data-edit-emp]').forEach(btn => {
                 btn.onclick = (e) => {
                     const id = e.currentTarget.getAttribute('data-edit-emp');
                     const emp = employees.find(e => e.id === id);
                     if (emp) {
-                        // ปิดฟอร์มเพิ่มและเปิดฟอร์มแก้ไข
                         document.getElementById('add-emp-form')?.classList.add('hidden');
                         document.getElementById('edit-emp-form').classList.remove('hidden');
-
-                        // เติมข้อมูลเก่าลงไปในช่อง
                         document.getElementById('edit-emp-id').value = emp.id;
                         document.getElementById('edit-emp-name').value = emp.name;
                         document.getElementById('edit-emp-pin').value = emp.pin || '';
@@ -1048,7 +1031,6 @@
                         document.getElementById('edit-emp-base').value = emp.baseRate || '';
                         document.getElementById('edit-emp-ot').value = emp.otRate || '';
                         
-                        // เลื่อนหน้าจอกลับไปด้านบนสุดเพื่อให้เห็นฟอร์มแก้ไข
                         const scrollArea = document.getElementById('owner-scroll-area');
                         if (scrollArea) scrollArea.scrollTop = 0;
                     }
@@ -1058,6 +1040,8 @@
             const btnSaveEditEmp = document.getElementById('save-edit-emp');
             if (btnSaveEditEmp) {
                 btnSaveEditEmp.onclick = async () => {
+                    if (isProcessing) return;
+
                     const id = document.getElementById('edit-emp-id').value;
                     const name = document.getElementById('edit-emp-name').value.trim();
                     const pin = document.getElementById('edit-emp-pin').value.trim();
@@ -1067,6 +1051,11 @@
 
                     if (!name || pin.length < 4) return showModal('แจ้งเตือน', 'กรอกชื่อและ PIN อย่างน้อย 4 หลัก');
                     
+                    // เช็คชื่อซ้ำ (แต่ข้ามชื่อตัวเองที่กำลังแก้)
+                    const isDuplicate = employees.some(e => e.id !== id && e.name.toLowerCase() === name.toLowerCase());
+                    if (isDuplicate) return showModal('ข้อผิดพลาด', 'ชื่อนี้ซ้ำกับพนักงานคนอื่นในระบบ');
+
+                    isProcessing = true;
                     try {
                         await updateDoc(doc(db, `artifacts/${appId}/public/data/employees`, id), { 
                             name, pin, wageType, baseRate, otRate 
@@ -1075,11 +1064,12 @@
                         showModal('สำเร็จ', 'แก้ไขข้อมูลพนักงานเรียบร้อย');
                     } catch (error) {
                         showModal('ผิดพลาด', 'ไม่สามารถแก้ไขข้อมูลได้');
+                    } finally {
+                        isProcessing = false;
                     }
                 };
             }
 
-            // --- พนักงาน: ลบ ---
             document.querySelectorAll('[data-delete-emp]').forEach(btn => {
                 btn.onclick = (e) => {
                     const id = e.currentTarget.getAttribute('data-delete-emp');
@@ -1106,14 +1096,32 @@
             const btnSavePin = document.getElementById('btn-save-owner-pin');
             if (btnSavePin) {
                 btnSavePin.onclick = () => {
+                    if (isProcessing) return;
                     const newPin = document.getElementById('new-owner-pin').value.trim();
-                    if(!newPin) return;
-                    showModal('ยืนยัน', 'เปลี่ยนรหัส?', [
+                    const confirmPin = document.getElementById('confirm-owner-pin').value.trim();
+
+                    if (!newPin || newPin.length < 4) return showModal('แจ้งเตือน', 'รหัสผ่านต้องมีอย่างน้อย 4 หลัก');
+                    
+                    // 4. Human Error Prevention: ป้องกันพิมพ์รหัสผิด
+                    if (newPin !== confirmPin) {
+                        return showModal('ข้อผิดพลาด', 'รหัสผ่านทั้ง 2 ช่องไม่ตรงกัน กรุณาพิมพ์ใหม่ให้เหมือนกันครับ');
+                    }
+                    
+                    showModal('ยืนยัน', 'ต้องการเปลี่ยนรหัสผ่านเข้าระบบเจ้าของร้านใช่หรือไม่?', [
                         { text: 'ยกเลิก', type: 'white', action: closeModal },
                         { text: 'ยืนยัน', type: 'danger', action: async () => {
-                            await saveSettings({ ownerPin: newPin });
-                            closeModal();
-                            showModal('สำเร็จ', 'เปลี่ยนรหัสเรียบร้อยแล้ว');
+                            isProcessing = true;
+                            try {
+                                await saveSettings({ ownerPin: newPin });
+                                closeModal();
+                                showModal('สำเร็จ', 'เปลี่ยนรหัสเรียบร้อยแล้ว');
+                                document.getElementById('new-owner-pin').value = '';
+                                document.getElementById('confirm-owner-pin').value = '';
+                            } catch(e) {
+                                showModal('ผิดพลาด', 'อัปเดตไม่สำเร็จ');
+                            } finally {
+                                isProcessing = false;
+                            }
                         }}
                     ]);
                 }
