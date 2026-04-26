@@ -299,14 +299,93 @@
         <nav class="bottom-nav" id="bottomNav" style="display: none;"></nav>
     </div>
 
-    <script>
+    <!-- ใช้ type="module" เพื่อใช้งาน Firebase JS SDK v9 -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+
+        // Firebase Configuration ของคุณ
+        const firebaseConfig = {
+            apiKey: "AIzaSyBHuZGyY1F3v4rCrhrpt9YB90C0Ahh-stE",
+            authDomain: "my-company-time-tracking.firebaseapp.com",
+            projectId: "my-company-time-tracking",
+            storageBucket: "my-company-time-tracking.firebasestorage.app",
+            messagingSenderId: "758524847747",
+            appId: "1:758524847747:web:2e5a49e4064334f1265db6",
+            measurementId: "G-50SYJKTRT1"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
         /* =========================================
-           ส่วนที่ 1: การจัดการข้อมูล
+           ส่วนที่ 1: การจัดการข้อมูล (State & Firebase)
            ========================================= */
-        let records = JSON.parse(localStorage.getItem('timeRecords')) || [];
-        let employees = JSON.parse(localStorage.getItem('employees')) || [];
-        let adminPin = localStorage.getItem('adminPin'); 
+        let records = [];
+        let employees = [];
+        let adminPin = null; 
         let currentUser = JSON.parse(sessionStorage.getItem('currentUser')) || null;
+        
+        let isReady = false;
+        let loadedFlags = { emp: false, rec: false, sys: false };
+        const contentDiv = document.getElementById('app-content');
+        const bottomNav = document.getElementById('bottomNav');
+        const btnLogout = document.getElementById('btnLogout');
+        const roleBadge = document.getElementById('roleBadge');
+        let clockInterval;
+
+        // เริ่มต้นตรวจสอบสิทธิ์ (Anonymous Auth) และดึงข้อมูล
+        contentDiv.innerHTML = '<div class="empty-state">กำลังเชื่อมต่อฐานข้อมูล... ⏳</div>';
+        
+        signInAnonymously(auth).then(() => {
+            setupRealtimeListeners();
+        }).catch(err => {
+            console.error("Auth Failed:", err);
+            contentDiv.innerHTML = '<div class="empty-state" style="color: #f43f5e;">การเชื่อมต่อฐานข้อมูลล้มเหลว<br>กรุณาตรวจสอบ Firebase Security Rules</div>';
+        });
+
+        function checkReady() {
+            if (loadedFlags.emp && loadedFlags.rec && loadedFlags.sys && !isReady) {
+                isReady = true;
+                updateHeaderAndNav();
+                handleRouting();
+            }
+        }
+
+        // ฟังการเปลี่ยนแปลงของข้อมูลแบบ Real-time
+        function setupRealtimeListeners() {
+            // ฟังข้อมูลพนักงาน
+            onSnapshot(collection(db, "employees"), (snap) => {
+                employees = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                loadedFlags.emp = true;
+                if(isReady) refreshCurrentView(); else checkReady();
+            }, (error) => console.error(error));
+
+            // ฟังข้อมูลประวัติ
+            onSnapshot(collection(db, "timeRecords"), (snap) => {
+                records = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                records.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+                loadedFlags.rec = true;
+                if(isReady) refreshCurrentView(); else checkReady();
+            }, (error) => console.error(error));
+
+            // ฟังข้อมูลตั้งค่าระบบ (Admin PIN)
+            onSnapshot(collection(db, "system"), (snap) => {
+                const adminDoc = snap.docs.find(d => d.id === 'settings');
+                if (adminDoc) adminPin = adminDoc.data().adminPin;
+                else adminPin = null;
+                loadedFlags.sys = true;
+                if(isReady) refreshCurrentView(); else checkReady();
+            }, (error) => console.error(error));
+        }
+
+        function refreshCurrentView() {
+            // รีโหลดหน้าปัจจุบันเพื่อให้ข้อมูลเป็นปัจจุบันที่สุด
+            const page = window.location.hash.replace('#', '');
+            if (page) navigateTo(page, false);
+        }
 
         function getEmployeeStatus(empId) {
             const empRecords = records.filter(r => r.empId === empId);
@@ -314,42 +393,79 @@
             return empRecords[empRecords.length - 1].type;
         }
 
-        function recordTime(type) {
+        /* =========================================
+           ส่วนส่งออกฟังก์ชันให้ HTML เรียกใช้งานได้ (เพราะใช้ type="module")
+           ========================================= */
+        window.saveSetupPin = async function() {
+            const pin = document.getElementById('setupPin').value;
+            if (pin.length !== 4 || isNaN(pin)) return alert('กรุณากรอกตัวเลข 4 หลักเท่านั้น');
+            
+            await setDoc(doc(db, "system", "settings"), { adminPin: pin });
+            adminPin = pin;
+            navigateTo('login');
+        };
+
+        window.recordTime = async function(type) {
             if (!currentUser || currentUser.role !== 'emp') return;
             const emp = employees.find(e => e.id === currentUser.id);
             if (!emp) return;
 
             const now = new Date();
-            records.push({
-                id: Date.now(),
+            const recordData = {
                 empId: emp.id,
                 empName: emp.name,
                 type: type,
                 timestamp: now.toISOString(),
                 timeString: now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }),
                 dateString: now.toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' })
-            });
-            localStorage.setItem('timeRecords', JSON.stringify(records));
-            renderEmpDashboard();
-        }
+            };
+            
+            // เพิ่มลง Firestore 
+            await addDoc(collection(db, "timeRecords"), recordData);
+        };
 
-        function logout() {
+        window.logout = function() {
             sessionStorage.removeItem('currentUser');
             currentUser = null;
             clearInterval(clockInterval);
             updateHeaderAndNav();
             navigateTo('login');
-        }
+        };
+
+        window.handleAddEmployee = async function() {
+            const name = document.getElementById('newEmpName').value.trim();
+            const pin = document.getElementById('newEmpPin').value;
+            if (!name) return alert('กรุณาระบุชื่อ');
+            if (pin.length !== 4 || isNaN(pin)) return alert('กรุณาตั้งรหัส PIN 4 หลักที่เป็นตัวเลข');
+
+            await addDoc(collection(db, "employees"), { name, pin });
+            // UI จะถูกอัปเดตอัตโนมัติจาก onSnapshot
+        };
+
+        window.handleDeleteEmployee = async function(id) {
+            if (confirm('ยืนยันการลบพนักงานรายนี้?\nประวัติการทำงานเดิมจะยังคงอยู่')) {
+                await deleteDoc(doc(db, "employees", id));
+            }
+        };
+
+        window.clearAllHistory = async function() {
+            if(confirm('คำเตือน! ต้องการลบข้อมูลประวัติของ "ทุกคน" ใช่หรือไม่?')) {
+                const promises = records.map(r => deleteDoc(doc(db, "timeRecords", r.id)));
+                await Promise.all(promises);
+            }
+        };
+
+        window.navigateTo = navigateTo;
+        window.promptAdminLogin = promptAdminLogin;
+        window.verifyAdminLogin = verifyAdminLogin;
+        window.promptEmpLogin = promptEmpLogin;
+        window.verifyEmpLogin = verifyEmpLogin;
+        window.renderLogin = renderLogin;
+
 
         /* =========================================
            ส่วนที่ 2: การควบคุม UI แกนหลัก
            ========================================= */
-        const contentDiv = document.getElementById('app-content');
-        const bottomNav = document.getElementById('bottomNav');
-        const btnLogout = document.getElementById('btnLogout');
-        const roleBadge = document.getElementById('roleBadge');
-        let clockInterval;
-
         function updateHeaderAndNav() {
             if (!currentUser) {
                 bottomNav.style.display = 'none';
@@ -378,7 +494,7 @@
                 `;
             } else if (currentUser.role === 'emp') {
                 bottomNav.style.display = 'none';
-                btnLogout.style.display = 'none'; /* ซ่อนปุ่มมุมขวาบนของพนักงาน เพื่อให้ไปใช้ปุ่มนิ้วโป้งด้านล่างแทน */
+                btnLogout.style.display = 'none';
                 roleBadge.innerHTML = '<span class="user-role-badge role-emp">Staff</span>';
             }
         }
@@ -405,26 +521,15 @@
             contentDiv.innerHTML = `
                 <div class="card" style="margin-top: 2rem;">
                     <div class="icon-circle" style="margin: 0 auto 1.5rem auto; width: 70px; height: 70px; background: var(--primary-gradient); color: white;"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="36" height="36"><path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg></div>
-                    <h2 style="margin-top: 0; font-weight: 800; letter-spacing: -0.5px;">ยินดีต้อนรับ</h2>
+                    <h2 style="margin-top: 0; font-weight: 800; letter-spacing: -0.5px;">ยินดีต้อนรับสู่ระบบคลาวด์</h2>
                     <p style="color: var(--text-muted); font-size: 0.95rem; font-weight: 500; margin-bottom: 2rem;">เริ่มต้นใช้งานระบบ<br>กรุณาตั้งรหัส PIN 4 หลัก สำหรับแอดมิน</p>
                     <input type="password" id="setupPin" class="native-input" placeholder="••••" maxlength="4" pattern="[0-9]*" inputmode="numeric" style="text-align: center; font-size: 2rem; letter-spacing: 12px; padding: 1rem;" oninput="if(this.value.length === 4) saveSetupPin()" autofocus>
                 </div>
-                
-                <!-- ดันพื้นที่ขึ้นไม่ให้การ์ดโดนปุ่มบัง -->
                 <div style="height: 120px;"></div>
-                
                 <div class="thumb-actions">
                     <button class="btn btn-primary" style="padding: 1.2rem; border-radius: var(--radius-xl);" onclick="saveSetupPin()">บันทึกและเริ่มต้น</button>
                 </div>
             `;
-        }
-
-        function saveSetupPin() {
-            const pin = document.getElementById('setupPin').value;
-            if (pin.length !== 4 || isNaN(pin)) return alert('กรุณากรอกตัวเลข 4 หลักเท่านั้น');
-            localStorage.setItem('adminPin', pin);
-            adminPin = pin;
-            navigateTo('login');
         }
 
         function renderLogin() {
@@ -467,9 +572,7 @@
                     <p style="color: var(--text-muted); font-size: 0.95rem; font-weight: 500; margin-bottom: 1.5rem;">กรุณากรอกรหัส PIN</p>
                     <input type="password" id="authPin" class="native-input" placeholder="••••" maxlength="4" pattern="[0-9]*" inputmode="numeric" style="text-align: center; font-size: 2rem; letter-spacing: 12px; padding: 1rem;" oninput="if(this.value.length === 4) verifyAdminLogin()" autofocus>
                 </div>
-                
                 <div style="height: 100px;"></div>
-                
                 <div class="thumb-actions">
                     <button class="btn btn-outline" style="padding: 1.2rem; border-radius: var(--radius-xl);" onclick="renderLogin()">ย้อนกลับ</button>
                 </div>
@@ -498,9 +601,7 @@
                     <p style="color: var(--text-muted); font-size: 0.95rem; font-weight: 500; margin-bottom: 1.5rem;">กรุณากรอกรหัสประจำตัว</p>
                     <input type="password" id="authPin" class="native-input" placeholder="••••" maxlength="4" pattern="[0-9]*" inputmode="numeric" style="text-align: center; font-size: 2rem; letter-spacing: 12px; padding: 1rem;" oninput="if(this.value.length === 4) verifyEmpLogin('${empId}')" autofocus>
                 </div>
-                
                 <div style="height: 100px;"></div>
-
                 <div class="thumb-actions">
                     <button class="btn btn-outline" style="padding: 1.2rem; border-radius: var(--radius-xl);" onclick="renderLogin()">ย้อนกลับ</button>
                 </div>
@@ -574,7 +675,6 @@
                 
                 ${recentHistoryHTML}
 
-                <!-- เว้นพื้นที่ด้านล่างให้ Thumb Actions Overlay -->
                 <div style="height: 180px;"></div>
 
                 <div class="thumb-actions">
@@ -669,25 +769,6 @@
             `;
         }
 
-        function handleAddEmployee() {
-            const name = document.getElementById('newEmpName').value.trim();
-            const pin = document.getElementById('newEmpPin').value;
-            if (!name) return alert('กรุณาระบุชื่อ');
-            if (pin.length !== 4 || isNaN(pin)) return alert('กรุณาตั้งรหัส PIN 4 หลักที่เป็นตัวเลข');
-
-            employees.push({ id: Date.now().toString(), name: name, pin: pin });
-            localStorage.setItem('employees', JSON.stringify(employees));
-            renderAdminEmployees();
-        }
-
-        function handleDeleteEmployee(id) {
-            if (confirm('ยืนยันการลบพนักงานรายนี้?\nประวัติการทำงานเดิมจะยังคงอยู่')) {
-                employees = employees.filter(e => e.id !== id);
-                localStorage.setItem('employees', JSON.stringify(employees));
-                renderAdminEmployees();
-            }
-        }
-
         function renderAdminHistory() {
             clearInterval(clockInterval);
             let listHTML = '';
@@ -726,18 +807,10 @@
             `;
         }
 
-        function clearAllHistory() {
-            if(confirm('คำเตือน! ต้องการลบข้อมูลประวัติของ "ทุกคน" ใช่หรือไม่?')) {
-                records = [];
-                localStorage.removeItem('timeRecords');
-                renderAdminHistory();
-            }
-        }
-
         /* =========================================
            ส่วนที่ 6: ระบบสลับหน้าและ Router แกนกลาง
            ========================================= */
-        function navigateTo(page) {
+        function navigateTo(page, pushState = true) {
             if (!adminPin && page !== 'setup') { window.location.hash = 'setup'; return; }
             if (adminPin && !currentUser && page !== 'login') { window.location.hash = 'login'; return; }
 
@@ -752,8 +825,10 @@
                 if(activeTab) activeTab.classList.add('active');
             }
 
-            window.location.hash = page;
-            document.querySelector('main').scrollTop = 0;
+            if(pushState) {
+                window.location.hash = page;
+                document.querySelector('main').scrollTop = 0;
+            }
 
             if (page === 'setup') renderSetup();
             else if (page === 'login') renderLogin();
@@ -764,6 +839,8 @@
         }
 
         function handleRouting() {
+            if(!isReady) return; // รอให้โหลดข้อมูลเสร็จก่อนทำงาน
+            
             let page = window.location.hash.replace('#', '');
             if (!page) {
                 if (!adminPin) page = 'setup';
@@ -774,7 +851,7 @@
             navigateTo(page);
         }
 
-        window.addEventListener('load', () => { updateHeaderAndNav(); handleRouting(); });
+        // เราใช้ onSnapshot เป็นตัวควบคุมการโหลดแล้ว
         window.addEventListener('hashchange', handleRouting);
 
     </script>
