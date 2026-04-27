@@ -1,261 +1,365 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="th">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>TimeTracker Mobile</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบบันทึกเวลางาน</title>
     
-    <!-- Tailwind CSS -->
+    <!-- Fonts: Kanit for Thai typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS (Flat Design Utility) -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- FontAwesome Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
-    <style>
-        /* Hide scrollbar for a cleaner mobile app look */
-        ::-webkit-scrollbar { width: 0px; background: transparent; }
-        
-        /* View Management Classes */
-        .view-hidden { display: none !important; }
-        .view-active { display: flex !important; }
-        .tab-hidden { display: none !important; }
-        .tab-active { display: block !important; }
-
-        /* Smooth Transitions */
-        .fade-in { animation: fadeIn 0.3s ease-in-out; }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Kanit', 'sans-serif'] },
+                    colors: {
+                        brand: { 50: '#f0fdf4', 100: '#dcfce7', 500: '#22c55e', 600: '#16a34a' }, // Flat Green
+                        dark: { 800: '#1e293b', 900: '#0f172a' }, // Flat Dark Blue
+                        flat: { red: '#ef4444', blue: '#3b82f6', yellow: '#eab308', gray: '#f3f4f6' }
+                    }
+                }
+            }
         }
+    </script>
+    <style>
+        /* Flat Design adjustments */
+        body { background-color: #f8fafc; color: #334155; }
+        .flat-btn { transition: all 0.2s ease; border-radius: 8px; font-weight: 500; }
+        .flat-btn:active { transform: scale(0.95); }
+        .flat-card { background: white; border-radius: 12px; border: 1px solid #e2e8f0; }
+        
+        /* Hide scrollbar for cleaner look */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        
+        /* PIN Dots */
+        .pin-dot { transition: all 0.2s ease; }
+        .pin-dot.active { background-color: #22c55e; transform: scale(1.2); }
     </style>
 </head>
-<body class="bg-slate-200 h-screen w-screen flex items-center justify-center font-sans text-slate-900 overflow-hidden selection:bg-indigo-100">
+<body class="antialiased h-screen flex flex-col overflow-hidden">
 
-    <!-- Mobile App Wrapper -->
-    <div id="app-wrapper" class="w-full h-full sm:h-[90vh] sm:max-h-[850px] sm:max-w-[400px] bg-slate-50 sm:rounded-[2.5rem] sm:shadow-2xl overflow-hidden relative flex flex-col sm:border-[8px] border-slate-300">
-        
-        <!-- 1. LOADING VIEW -->
-        <div id="view-loading" class="view-active flex-col items-center justify-center h-full gap-4 text-slate-500 bg-slate-50 z-50 absolute inset-0">
-            <i class="fa-solid fa-circle-notch fa-spin text-5xl text-indigo-500"></i>
-            <p class="font-medium animate-pulse text-sm">Connecting to cloud...</p>
-        </div>
-
-        <!-- 2. PIN PAD VIEW (Default Entry) -->
-        <div id="view-pin" class="view-hidden flex-col h-full bg-slate-50 absolute inset-0 z-40">
-            <!-- Informational Top Half -->
-            <div class="flex-1 flex flex-col items-center justify-center p-4 min-h-0">
-                <div class="w-16 h-16 sm:w-20 sm:h-20 bg-indigo-600 rounded-3xl flex items-center justify-center mx-auto mb-4 sm:mb-6 shadow-xl shadow-indigo-200 shrink-0">
-                    <i class="fa-solid fa-clock text-3xl sm:text-4xl text-white"></i>
-                </div>
-                <h2 class="text-2xl sm:text-3xl font-bold text-slate-900 mb-2 shrink-0">TimeTracker</h2>
-
-                <!-- PIN Indicator Dots -->
-                <div id="pin-dots" class="flex gap-4 sm:gap-5 mt-6 sm:mt-10 shrink-0">
-                    <div class="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-slate-300 transition-all duration-200"></div>
-                    <div class="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-slate-300 transition-all duration-200"></div>
-                    <div class="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-slate-300 transition-all duration-200"></div>
-                    <div class="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-slate-300 transition-all duration-200"></div>
-                </div>
-                <p id="pin-error" class="text-rose-500 text-sm font-bold mt-4 sm:mt-6 opacity-0 transition-opacity bg-rose-100 px-4 py-1.5 rounded-full shrink-0">Incorrect PIN</p>
-            </div>
-
-            <!-- Bottom-Anchored Numpad (Thumb Zone) -->
-            <div class="bg-white px-6 py-6 sm:py-8 grid grid-cols-3 gap-y-3 sm:gap-y-5 gap-x-4 sm:gap-x-6 pb-8 sm:pb-12 rounded-t-[2.5rem] shadow-[0_-10px_40px_rgba(0,0,0,0.05)] border-t border-slate-100 shrink-0">
-                <!-- Numpad buttons generated in JS -->
-            </div>
-        </div>
-
-        <!-- 3. MAIN APP VIEW (Container for Employee/Owner) -->
-        <div id="view-main" class="view-hidden flex-col h-full absolute inset-0 z-30 bg-slate-50 overflow-hidden">
-            
-            <!-- A. EMPLOYEE INTERFACE -->
-            <div id="interface-employee" class="tab-hidden flex-col h-full fade-in relative">
-                
-                <!-- Scrollable Content Area -->
-                <div class="flex-1 overflow-y-auto pb-48">
-                    <!-- Minimal Profile Header -->
-                    <div class="px-6 py-6 flex items-center justify-between">
-                        <div class="flex items-center gap-4">
-                            <div class="w-14 h-14 bg-indigo-100 rounded-full flex items-center justify-center overflow-hidden border-2 border-white shadow-sm">
-                                <span id="emp-avatar-initial" class="text-2xl font-bold text-indigo-600">?</span>
-                            </div>
-                            <div>
-                                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-0.5" id="emp-current-date">--</p>
-                                <h2 class="font-bold text-slate-900 text-xl leading-tight" id="emp-profile-name">Loading...</h2>
-                            </div>
-                        </div>
-                        <div id="emp-status-badge" class="px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider bg-slate-200 text-slate-600 shadow-inner">OUT</div>
-                    </div>
-
-                    <!-- Main Clock & Stats Area -->
-                    <div class="flex flex-col items-center justify-center py-4 px-4">
-                        <div class="w-56 h-56 rounded-full bg-white shadow-[0_10px_40px_rgba(0,0,0,0.05)] border-[8px] border-slate-50 flex flex-col items-center justify-center relative mb-8">
-                            <div id="emp-clock-ring" class="absolute inset-0 rounded-full border-[6px] border-green-500 opacity-20 animate-ping hidden" style="animation-duration: 3s;"></div>
-                            <div id="emp-clock-time" class="text-5xl font-bold text-slate-800 tracking-tighter font-mono">00:00:00</div>
-                            <div id="emp-clock-ampm" class="text-base font-bold text-slate-400 mt-1 uppercase">AM</div>
-                        </div>
-                        
-                        <div class="flex items-center gap-2 text-indigo-700 bg-indigo-100 px-5 py-2.5 rounded-full">
-                            <i class="fa-solid fa-chart-line"></i>
-                            <span class="font-bold text-sm" id="emp-worked-hours">0h 0m Active</span>
-                        </div>
-                    </div>
-
-                    <!-- Recent Activity Mini List -->
-                    <div class="px-6 mt-4">
-                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Today's Punches</p>
-                        <div id="emp-logs-container" class="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden divide-y divide-slate-50 mb-6">
-                            <!-- Logs injected here -->
-                        </div>
-                    </div>
-                </div>
-
-                <!-- BOTTOM FIXED DOCK (Thumb Zone) -->
-                <div class="absolute bottom-0 w-full bg-white border-t border-slate-100 p-6 pb-8 shadow-[0_-10px_40px_rgba(0,0,0,0.05)] rounded-t-[2.5rem] z-20">
-                    <div id="emp-action-buttons" class="space-y-3 mb-3">
-                        <!-- Dynamic Punch Buttons -->
-                    </div>
-                    <button onclick="logout()" class="w-full h-14 bg-slate-100 text-slate-600 rounded-2xl font-bold text-base flex items-center justify-center gap-2 active:bg-slate-200 transition-colors">
-                        <i class="fa-solid fa-right-from-bracket"></i> Exit to Kiosk
-                    </button>
-                </div>
-            </div>
-
-            <!-- B. OWNER INTERFACE -->
-            <div id="interface-owner" class="tab-hidden flex-col h-full fade-in relative bg-slate-50">
-                
-                <!-- Informational Top Header -->
-                <div class="px-6 py-5 bg-white shadow-sm z-10 flex items-center justify-between">
-                    <div>
-                        <h1 class="text-xl font-bold text-slate-900">Owner Dashboard</h1>
-                        <p class="text-xs text-slate-500 font-medium flex items-center gap-1 mt-0.5"><i class="fa-solid fa-cloud text-indigo-400"></i> Synced securely</p>
-                    </div>
-                    <div class="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-500">
-                        <i class="fa-solid fa-briefcase"></i>
-                    </div>
-                </div>
-
-                <!-- Scrollable Area -->
-                <div class="flex-1 overflow-y-auto pb-32">
-                    <!-- LIVE TAB CONTENT -->
-                    <div id="owner-tab-live" class="tab-active space-y-4 p-4 fade-in">
-                        <div class="bg-slate-900 rounded-3xl p-6 text-white flex justify-between items-center shadow-lg">
-                            <div>
-                                <p class="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Working Now</p>
-                                <div class="text-4xl font-bold flex items-baseline gap-2">
-                                    <span id="own-active-count">0</span> <span class="text-xl text-slate-500 font-medium" id="own-total-count">/ 0</span>
-                                </div>
-                            </div>
-                            <div class="w-14 h-14 rounded-full bg-green-500/20 flex items-center justify-center">
-                                <div class="w-5 h-5 rounded-full bg-green-500 animate-pulse"></div>
-                            </div>
-                        </div>
-
-                        <h3 class="text-sm font-bold text-slate-500 uppercase tracking-wider px-2 mt-6">Current Status</h3>
-                        <div id="own-live-list" class="space-y-3">
-                            <!-- Live items injected here -->
-                        </div>
-                    </div>
-
-                    <!-- DIRECTORY TAB CONTENT -->
-                    <div id="owner-tab-team" class="tab-hidden space-y-3 p-4 fade-in">
-                        <div id="own-team-list" class="space-y-3 pb-6">
-                            <!-- Team items injected here -->
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Floating Add Button (Slightly higher to clear bottom nav) -->
-                <button onclick="openModal()" id="own-fab-add" class="hidden absolute bottom-32 right-6 w-16 h-16 bg-indigo-600 text-white rounded-full flex items-center justify-center shadow-[0_10px_25px_rgba(79,70,229,0.4)] active:scale-95 transition-transform z-20">
-                    <i class="fa-solid fa-user-plus text-2xl"></i>
-                </button>
-
-                <!-- BOTTOM NAVIGATION BAR (Thumb Zone) -->
-                <div class="absolute bottom-0 w-full bg-white border-t border-slate-100 px-6 py-4 pb-8 shadow-[0_-10px_40px_rgba(0,0,0,0.05)] rounded-t-[2.5rem] flex justify-between items-center z-20">
-                    <button onclick="switchOwnerTab('LIVE')" id="nav-btn-live" class="flex-1 flex flex-col items-center gap-1.5 text-indigo-600 transition-colors">
-                        <i class="fa-solid fa-tower-broadcast text-xl"></i>
-                        <span class="text-xs font-bold">Live</span>
-                    </button>
-                    
-                    <button onclick="switchOwnerTab('TEAM')" id="nav-btn-team" class="flex-1 flex flex-col items-center gap-1.5 text-slate-400 hover:text-slate-600 transition-colors">
-                        <i class="fa-solid fa-address-book text-xl"></i>
-                        <span class="text-xs font-bold">Directory</span>
-                    </button>
-                    
-                    <button onclick="logout()" class="flex-1 flex flex-col items-center gap-1.5 text-slate-400 hover:text-rose-500 transition-colors">
-                        <i class="fa-solid fa-right-from-bracket text-xl"></i>
-                        <span class="text-xs font-bold">Exit</span>
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- 4. ADD/EDIT EMPLOYEE BOTTOM SHEET MODAL -->
-        <div id="modal-employee" class="view-hidden absolute inset-0 z-50 flex-col justify-end bg-slate-900/60 backdrop-blur-sm fade-in">
-            <div class="bg-white w-full rounded-t-[2.5rem] pt-8 pb-10 px-6 shadow-2xl transition-transform transform translate-y-0">
-                <div class="flex justify-between items-center mb-6">
-                    <h3 id="modal-title" class="text-2xl font-bold text-slate-900">New Member</h3>
+    <!-- Role Selection Screen -->
+    <div id="view-role-selection" class="hidden fixed inset-0 bg-gray-100 z-40 flex items-center justify-center p-4">
+        <div class="bg-white p-8 rounded-2xl shadow-sm max-w-md w-full text-center">
+            <div class="w-16 h-16 bg-brand-500 rounded-2xl flex items-center justify-center text-white font-bold text-3xl mx-auto mb-6">T</div>
+            <h2 class="text-2xl font-bold text-gray-800 mb-6">เลือกสถานะผู้ใช้งาน</h2>
+            <div class="space-y-4">
+                <div>
+                    <button onclick="app.promptLogin('owner')" class="w-full flat-btn py-4 bg-dark-900 text-white text-lg hover:bg-black">เจ้าของร้าน / ผู้ดูแล</button>
+                    <p class="text-xs text-gray-400 mt-2">PIN เริ่มต้น: 9999</p>
                 </div>
                 
-                <form id="employee-form" class="space-y-5">
-                    <input type="hidden" id="form-emp-id">
-                    
-                    <div class="space-y-4">
-                        <input type="text" id="form-emp-name" required placeholder="Full Name" class="w-full bg-slate-50 px-5 py-4 rounded-2xl border border-slate-200 outline-none focus:border-indigo-500 focus:bg-indigo-50/30 transition-colors text-slate-900 font-medium text-lg">
-                        <input type="text" id="form-emp-role" required placeholder="Role (e.g. Designer)" class="w-full bg-slate-50 px-5 py-4 rounded-2xl border border-slate-200 outline-none focus:border-indigo-500 focus:bg-indigo-50/30 transition-colors text-slate-900 font-medium text-lg">
-                        
-                        <div class="pt-2">
-                            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 ml-1">Kiosk Login PIN</label>
-                            <input type="text" id="form-emp-pin" required maxlength="4" pattern="\d{4}" placeholder="4-Digit Code" class="w-full bg-slate-50 px-5 py-4 rounded-2xl border border-slate-200 outline-none focus:border-indigo-500 focus:bg-indigo-50/30 transition-colors text-indigo-700 font-mono tracking-[0.5em] text-xl font-bold text-center">
-                        </div>
-                    </div>
-
-                    <!-- Bottom Modal Actions -->
-                    <div class="pt-4 flex flex-col gap-3">
-                        <button type="submit" id="form-btn-submit" class="w-full h-16 bg-indigo-600 text-white font-bold text-lg rounded-2xl active:bg-indigo-700 transition-colors shadow-md">
-                            Save Employee
-                        </button>
-                        <div class="flex gap-3">
-                            <button type="button" id="form-btn-delete" onclick="deleteCurrentEmployee()" class="hidden flex-1 h-14 bg-rose-50 text-rose-600 font-bold rounded-2xl active:bg-rose-100 flex items-center justify-center gap-2">
-                                <i class="fa-solid fa-trash"></i> Delete
-                            </button>
-                            <button type="button" onclick="closeModal()" class="flex-1 h-14 bg-slate-100 text-slate-600 font-bold rounded-2xl active:bg-slate-200">
-                                Cancel
-                            </button>
-                        </div>
-                    </div>
-                </form>
+                <div class="relative py-4">
+                    <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-gray-200"></div></div>
+                    <div class="relative flex justify-center"><span class="bg-white px-4 text-sm text-gray-500">หรือ</span></div>
+                </div>
+                
+                <div class="text-left">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">เข้าสู่ระบบสำหรับพนักงาน</label>
+                    <select id="employee-selector" class="w-full p-3 border border-gray-300 rounded-lg mb-3 focus:ring-2 focus:ring-brand-500 outline-none text-lg">
+                        <option value="">-- โหลดรายชื่อพนักงาน... --</option>
+                    </select>
+                    <button onclick="app.promptLogin('employee')" class="w-full flat-btn py-4 bg-brand-500 text-white text-lg hover:bg-brand-600">เข้าบันทึกเวลา</button>
+                </div>
             </div>
         </div>
-
     </div>
 
-    <!-- FIREBASE & APP LOGIC -->
+    <!-- PIN Pad Modal -->
+    <div id="modal-pin" class="hidden fixed inset-0 z-50 bg-dark-900 bg-opacity-80 flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-sm text-center">
+            <h3 id="pin-title" class="text-2xl font-bold text-gray-800 mb-1">กรุณาใส่รหัส PIN</h3>
+            <p id="pin-subtitle" class="text-brand-600 font-medium mb-8">...</p>
+            
+            <!-- PIN Dots -->
+            <div class="flex justify-center gap-4 mb-8">
+                <div class="w-4 h-4 rounded-full bg-gray-200 pin-dot" id="dot-1"></div>
+                <div class="w-4 h-4 rounded-full bg-gray-200 pin-dot" id="dot-2"></div>
+                <div class="w-4 h-4 rounded-full bg-gray-200 pin-dot" id="dot-3"></div>
+                <div class="w-4 h-4 rounded-full bg-gray-200 pin-dot" id="dot-4"></div>
+            </div>
+            
+            <!-- Numpad -->
+            <div class="grid grid-cols-3 gap-4 mb-6">
+                <button onclick="app.addPinDigit('1')" class="flat-btn bg-gray-50 hover:bg-gray-100 text-2xl font-medium py-4 rounded-xl text-gray-800">1</button>
+                <button onclick="app.addPinDigit('2')" class="flat-btn bg-gray-50 hover:bg-gray-100 text-2xl font-medium py-4 rounded-xl text-gray-800">2</button>
+                <button onclick="app.addPinDigit('3')" class="flat-btn bg-gray-50 hover:bg-gray-100 text-2xl font-medium py-4 rounded-xl text-gray-800">3</button>
+                <button onclick="app.addPinDigit('4')" class="flat-btn bg-gray-50 hover:bg-gray-100 text-2xl font-medium py-4 rounded-xl text-gray-800">4</button>
+                <button onclick="app.addPinDigit('5')" class="flat-btn bg-gray-50 hover:bg-gray-100 text-2xl font-medium py-4 rounded-xl text-gray-800">5</button>
+                <button onclick="app.addPinDigit('6')" class="flat-btn bg-gray-50 hover:bg-gray-100 text-2xl font-medium py-4 rounded-xl text-gray-800">6</button>
+                <button onclick="app.addPinDigit('7')" class="flat-btn bg-gray-50 hover:bg-gray-100 text-2xl font-medium py-4 rounded-xl text-gray-800">7</button>
+                <button onclick="app.addPinDigit('8')" class="flat-btn bg-gray-50 hover:bg-gray-100 text-2xl font-medium py-4 rounded-xl text-gray-800">8</button>
+                <button onclick="app.addPinDigit('9')" class="flat-btn bg-gray-50 hover:bg-gray-100 text-2xl font-medium py-4 rounded-xl text-gray-800">9</button>
+                <div class="col-span-1"></div>
+                <button onclick="app.addPinDigit('0')" class="flat-btn bg-gray-50 hover:bg-gray-100 text-2xl font-medium py-4 rounded-xl text-gray-800">0</button>
+                <button onclick="app.removePinDigit()" class="flat-btn bg-red-50 hover:bg-red-100 text-flat-red text-xl font-medium py-4 rounded-xl flex justify-center items-center">
+                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M3 12l6.414 6.414a2 2 0 001.414.586H19a2 2 0 002-2V7a2 2 0 00-2-2h-8.172a2 2 0 00-1.414.586L3 12z"></path></svg>
+                </button>
+            </div>
+            
+            <button onclick="app.closePinModal()" class="text-gray-500 font-medium hover:text-gray-800 p-2">ยกเลิก</button>
+        </div>
+    </div>
+
+    <!-- Loading Screen -->
+    <div id="loading-screen" class="fixed inset-0 bg-white z-[100] flex flex-col items-center justify-center">
+        <svg class="animate-spin h-10 w-10 text-brand-500 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <p class="text-gray-500 font-medium">กำลังโหลดระบบ...</p>
+    </div>
+
+    <!-- Main App Container -->
+    <div id="app-container" class="hidden flex-1 flex flex-col md:flex-row h-full">
+        
+        <!-- Sidebar Navigation (Responsive) -->
+        <nav class="bg-dark-900 text-white md:w-64 flex-shrink-0 flex flex-row md:flex-col justify-between md:justify-start overflow-x-auto md:overflow-y-auto">
+            <div class="p-4 md:p-6 flex items-center md:mb-6">
+                <div class="w-10 h-10 bg-brand-500 rounded-lg flex items-center justify-center text-white font-bold text-xl mr-3">T</div>
+                <h1 class="text-lg md:text-xl font-semibold hidden md:block tracking-wide">TimeTracker</h1>
+            </div>
+            
+            <div class="flex md:flex-col w-full px-2 md:px-4 space-x-2 md:space-x-0 md:space-y-2 pb-2 md:pb-0">
+                <button onclick="app.switchView('dashboard')" id="nav-dashboard" class="nav-btn flex-1 md:flex-none flex items-center justify-center md:justify-start px-4 py-3 rounded-lg bg-dark-800 text-white hover:bg-dark-800 transition-colors">
+                    <svg class="w-5 h-5 md:mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
+                    <span class="hidden md:inline">หน้าหลัก</span>
+                </button>
+                <button onclick="app.switchView('history')" id="nav-history" class="nav-btn flex-1 md:flex-none flex items-center justify-center md:justify-start px-4 py-3 rounded-lg text-gray-400 hover:bg-dark-800 hover:text-white transition-colors">
+                    <svg class="w-5 h-5 md:mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <span class="hidden md:inline">ประวัติ</span>
+                </button>
+                <button onclick="app.switchView('employees')" id="nav-employees" class="nav-btn flex-1 md:flex-none flex items-center justify-center md:justify-start px-4 py-3 rounded-lg text-gray-400 hover:bg-dark-800 hover:text-white transition-colors">
+                    <svg class="w-5 h-5 md:mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                    <span class="hidden md:inline">พนักงาน</span>
+                </button>
+            </div>
+
+            <!-- User Info (Bottom of sidebar) -->
+            <div class="hidden md:block mt-auto p-4 border-t border-gray-800">
+                <div class="flex items-center mb-3">
+                    <div class="w-8 h-8 rounded-full bg-gray-600 flex items-center justify-center text-sm mr-3" id="user-avatar">U</div>
+                    <div class="truncate text-sm text-gray-300">
+                        <span id="user-id-display" class="font-medium">...</span>
+                        <br><span id="user-role-display" class="text-xs text-brand-500">...</span>
+                    </div>
+                </div>
+                <button onclick="app.showRoleScreen()" class="w-full text-xs text-gray-400 hover:text-white flex items-center justify-center py-2 border border-gray-700 rounded transition-colors">
+                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+                    ออกจากระบบ
+                </button>
+            </div>
+        </nav>
+
+        <!-- Main Content Area -->
+        <main class="flex-1 bg-flat-gray relative overflow-y-auto">
+            <!-- Header -->
+            <header class="bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center sticky top-0 z-10">
+                <h2 id="view-title" class="text-xl font-semibold text-gray-800">หน้าหลัก</h2>
+                <div class="text-right">
+                    <div id="live-time" class="text-2xl font-bold text-brand-600 tracking-tight">00:00:00</div>
+                    <div id="live-date" class="text-sm text-gray-500">วัน...ที่...</div>
+                </div>
+            </header>
+
+            <div class="p-4 md:p-8 max-w-5xl mx-auto w-full">
+                
+                <!-- VIEW: Dashboard -->
+                <section id="view-dashboard" class="app-view space-y-6">
+                    
+                    <!-- Dashboard: Employee View -->
+                    <div id="dashboard-employee" class="hidden">
+                        <!-- Status Card -->
+                        <div class="flat-card p-6 md:p-8 text-center">
+                            <div class="mb-4">
+                                <span id="today-status-badge" class="inline-block px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-600">
+                                    ยังไม่เข้างาน
+                                </span>
+                            </div>
+                            
+                            <div class="flex justify-center space-x-8 mb-8 text-left">
+                                <div>
+                                    <p class="text-sm text-gray-500 mb-1">เวลาเข้างาน</p>
+                                    <p id="time-in-display" class="text-3xl font-semibold text-gray-800">--:--</p>
+                                </div>
+                                <div class="border-l border-gray-200"></div>
+                                <div>
+                                    <p class="text-sm text-gray-500 mb-1">เวลาออกงาน</p>
+                                    <p id="time-out-display" class="text-3xl font-semibold text-gray-800">--:--</p>
+                                </div>
+                            </div>
+
+                            <!-- Action Buttons -->
+                            <div class="flex flex-col sm:flex-row justify-center items-center gap-4">
+                                <button id="btn-checkin" onclick="app.handleCheckIn()" class="flat-btn w-full sm:w-48 py-5 bg-brand-500 text-white text-xl disabled:opacity-50 disabled:cursor-not-allowed hover:bg-brand-600 hidden">
+                                    เข้างาน
+                                </button>
+                                <button id="btn-checkout" onclick="app.handleCheckOut()" class="flat-btn w-full sm:w-48 py-5 bg-flat-red text-white text-xl disabled:opacity-50 disabled:cursor-not-allowed hover:bg-red-600 hidden">
+                                    ออกงาน
+                                </button>
+                                <div id="msg-completed" class="text-brand-600 font-medium py-4 hidden flex items-center justify-center bg-brand-50 rounded-xl px-6 w-full max-w-md mx-auto">
+                                    <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                    คุณบันทึกเวลาครบแล้วสำหรับวันนี้
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Recent Activity Mini List -->
+                        <div class="mt-6">
+                            <h3 class="text-lg font-medium text-gray-800 mb-4">กิจกรรมวันนี้</h3>
+                            <div id="today-activity-list" class="flat-card divide-y divide-gray-100">
+                                <div class="p-4 text-center text-gray-500 text-sm">ยังไม่มีกิจกรรม</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Dashboard: Owner View -->
+                    <div id="dashboard-owner" class="hidden space-y-4">
+                        <h3 class="text-lg font-medium text-gray-800">สถานะพนักงานวันนี้</h3>
+                        <div class="flat-card overflow-hidden">
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr class="bg-gray-50 text-gray-500 text-sm">
+                                            <th class="px-6 py-3 font-medium border-b">พนักงาน</th>
+                                            <th class="px-6 py-3 font-medium border-b">เข้างาน</th>
+                                            <th class="px-6 py-3 font-medium border-b">ออกงาน</th>
+                                            <th class="px-6 py-3 font-medium border-b text-right">สถานะ</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="owner-today-table" class="divide-y divide-gray-100">
+                                        <tr><td colspan="4" class="px-6 py-8 text-center text-gray-500">กำลังโหลดข้อมูล...</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- VIEW: History -->
+                <section id="view-history" class="app-view hidden">
+                    <div class="flat-card overflow-hidden">
+                        <div class="bg-gray-50 px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                            <h3 class="font-medium text-gray-700">ประวัติการบันทึกเวลา (ล่าสุด 30 วัน)</h3>
+                            <button onclick="app.loadHistory()" class="text-brand-500 hover:text-brand-600 text-sm font-medium flex items-center">
+                                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                                รีเฟรช
+                            </button>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="bg-gray-50 text-gray-500 text-sm">
+                                        <th class="px-6 py-3 font-medium border-b">วันที่</th>
+                                        <th id="hist-col-name" class="px-6 py-3 font-medium border-b">ชื่อพนักงาน</th>
+                                        <th class="px-6 py-3 font-medium border-b">เข้างาน</th>
+                                        <th class="px-6 py-3 font-medium border-b">ออกงาน</th>
+                                        <th class="px-6 py-3 font-medium border-b text-right">สถานะ</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="history-table-body" class="divide-y divide-gray-100">
+                                    <tr><td colspan="5" class="px-6 py-8 text-center text-gray-500">กำลังโหลดข้อมูล...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- VIEW: Employees -->
+                <section id="view-employees" class="app-view hidden space-y-6">
+                    <div class="flex justify-between items-center">
+                        <p class="text-gray-500 text-sm">จัดการรายชื่อพนักงานในความดูแลของคุณ</p>
+                        <button onclick="app.openAddEmployeeModal()" class="flat-btn px-4 py-2 bg-brand-500 text-white text-sm hover:bg-brand-600 flex items-center">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                            เพิ่มพนักงาน
+                        </button>
+                    </div>
+
+                    <div class="flat-card overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="bg-gray-50 text-gray-500 text-sm">
+                                        <th class="px-6 py-3 font-medium border-b">รหัสพนักงาน</th>
+                                        <th class="px-6 py-3 font-medium border-b">ชื่อ - นามสกุล</th>
+                                        <th class="px-6 py-3 font-medium border-b">ตำแหน่ง</th>
+                                        <th class="px-6 py-3 font-medium border-b">PIN</th>
+                                        <th class="px-6 py-3 font-medium border-b text-right">จัดการ</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="employees-table-body" class="divide-y divide-gray-100">
+                                    <tr><td colspan="5" class="px-6 py-8 text-center text-gray-500">กำลังโหลดข้อมูล...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal: Add Employee -->
+    <div id="modal-add-employee" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+        <!-- Backdrop -->
+        <div class="absolute inset-0 bg-dark-900 bg-opacity-50 transition-opacity" onclick="app.closeAddEmployeeModal()"></div>
+        
+        <!-- Modal Content -->
+        <div class="relative bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                <h3 class="text-lg font-semibold text-gray-800">เพิ่มพนักงานใหม่</h3>
+                <button onclick="app.closeAddEmployeeModal()" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            
+            <form id="form-add-employee" onsubmit="app.saveEmployee(event)" class="p-6 overflow-y-auto">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">รหัสพนักงาน</label>
+                        <input type="text" id="emp-code" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none" placeholder="เช่น EMP-001">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">ชื่อ - นามสกุล</label>
+                        <input type="text" id="emp-name" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none" placeholder="ระบุชื่อจริง นามสกุล">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">ตำแหน่ง</label>
+                        <input type="text" id="emp-position" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none" placeholder="เช่น พนักงานขาย, โปรแกรมเมอร์">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">รหัส PIN (4 หลัก)</label>
+                        <input type="password" id="emp-pin" required maxlength="4" pattern="[0-9]{4}" inputmode="numeric" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none text-xl tracking-[0.5em] font-mono text-center" placeholder="****">
+                        <p class="text-xs text-gray-500 mt-1">ใช้สำหรับให้พนักงานเข้าสู่ระบบ</p>
+                    </div>
+                </div>
+                
+                <div class="mt-6 flex justify-end gap-3">
+                    <button type="button" onclick="app.closeAddEmployeeModal()" class="flat-btn px-4 py-2 text-gray-600 hover:bg-gray-100">ยกเลิก</button>
+                    <button type="submit" id="btn-save-employee" class="flat-btn px-4 py-2 bg-brand-500 text-white hover:bg-brand-600">บันทึกข้อมูล</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Toast Notification System -->
+    <div id="toast-container" class="fixed bottom-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- Application Logic -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, doc, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, setDoc, getDoc, getDocs, onSnapshot, updateDoc, deleteDoc, serverTimestamp, addDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // --- App State ---
-        const state = {
-            user: null,
-            selectedRole: null, // 'EMPLOYEE' | 'OWNER'
-            isUnlocked: false,
-            pinBuffer: '',
-            
-            // Public Team Directory
-            teamEmployees: [],
-            
-            // Logged in Employee Session state
-            currentEmployee: null,
-            currentEmployeeLogs: [],
-            
-            // Owner UI State
-            ownerActiveTab: 'LIVE',
-            editingEmployeeId: null
-        };
-
-        // --- Setup Firebase ---
+        // --- Configuration ---
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'timetracker-app';
         const firebaseConfig = {
             apiKey: "AIzaSyBHuZGyY1F3v4rCrhrpt9YB90C0Ahh-stE",
             authDomain: "my-company-time-tracking.firebaseapp.com",
@@ -265,545 +369,645 @@
             appId: "1:758524847747:web:2e5a49e4064334f1265db6",
             measurementId: "G-50SYJKTRT1"
         };
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
 
-        // --- View Management ---
-        const views = {
-            loading: document.getElementById('view-loading'),
-            pin: document.getElementById('view-pin'),
-            main: document.getElementById('view-main'),
-            modal: document.getElementById('modal-employee')
-        };
+        const OWNER_MASTER_PIN = '9999';
 
-        function showView(viewName) {
-            Object.values(views).forEach(v => {
-                v.classList.remove('view-active');
-                v.classList.add('view-hidden');
-            });
-            if(views[viewName]) {
-                views[viewName].classList.remove('view-hidden');
-                views[viewName].classList.add('view-active');
-            }
-        }
-
-        // --- Authentication ---
-        async function initAuth() {
-            try {
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    try {
-                        await signInWithCustomToken(auth, __initial_auth_token);
-                    } catch (tokenError) {
-                        console.warn("Custom token mismatch. Falling back to anonymous sign-in.");
-                        await signInAnonymously(auth);
-                    }
-                } else {
-                    await signInAnonymously(auth);
-                }
-            } catch (error) {
-                console.error('Auth Error:', error);
-                alert("Authentication failed. Check console.");
-            }
-        }
-
-        onAuthStateChanged(auth, (user) => {
-            if (user) {
-                state.user = user;
-                setupFirestoreListeners();
-                renderNumpad();
-                updatePinDots();
-                showView('pin');
-                startGlobalTimer();
-            }
-        });
-
-        // --- Firestore Listeners ---
-        function setupFirestoreListeners() {
-            if (!state.user) return;
+        // --- Core Application State & Methods ---
+        window.app = {
+            db: null,
+            auth: null,
+            user: null,
+            role: null, // 'owner' or 'employee'
+            currentEmp: null, 
+            employeesCache: [], 
+            currentView: 'dashboard',
+            todayDocId: null,
+            unsubscribeToday: null,
             
-            // Master listener for public team directory
-            onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'employees'), (snapshot) => {
-                state.teamEmployees = snapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data()
-                }));
+            // PIN System State
+            pendingRole: null,
+            pendingEmp: null,
+            enteredPin: '',
+
+            // Formatting Utilities
+            utils: {
+                formatDateStr: (date) => {
+                    const year = date.getFullYear();
+                    const month = String(date.getMonth() + 1).padStart(2, '0');
+                    const day = String(date.getDate()).padStart(2, '0');
+                    return `${year}-${month}-${day}`;
+                },
+                formatTime: (date) => {
+                    if (!date) return '--:--';
+                    return date.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+                },
+                formatThaiDateFull: (date) => {
+                    const days = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
+                    const months = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+                    return `วัน${days[date.getDay()]}ที่ ${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear() + 543}`;
+                },
+                showToast: (message, type = 'success') => {
+                    const container = document.getElementById('toast-container');
+                    const toast = document.createElement('div');
+                    const bgColor = type === 'success' ? 'bg-brand-500' : (type === 'error' ? 'bg-flat-red' : 'bg-dark-800');
+                    toast.className = `${bgColor} text-white px-4 py-3 rounded-lg shadow-lg flex items-center transition-all duration-300 transform translate-y-10 opacity-0 pointer-events-auto`;
+                    toast.innerHTML = `<span class="text-sm font-medium">${message}</span>`;
+                    container.appendChild(toast);
+                    
+                    requestAnimationFrame(() => toast.classList.remove('translate-y-10', 'opacity-0'));
+                    setTimeout(() => {
+                        toast.classList.add('opacity-0');
+                        setTimeout(() => toast.remove(), 300);
+                    }, 3000);
+                }
+            },
+
+            // --- Initialization ---
+            init: async function() {
+                this.startClock();
                 
-                // Keep logged-in profile synced
-                if (state.currentEmployee) {
-                    const latestProfile = state.teamEmployees.find(e => e.id === state.currentEmployee.id);
-                    if (latestProfile) {
-                        state.currentEmployee = latestProfile;
-                    } else {
-                        // Profile deleted by owner
-                        logout();
-                        return;
+                try {
+                    const fbApp = initializeApp(firebaseConfig);
+                    this.auth = getAuth(fbApp);
+                    this.db = getFirestore(fbApp);
+
+                    try {
+                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                            await signInWithCustomToken(this.auth, __initial_auth_token);
+                        } else {
+                            await signInAnonymously(this.auth);
+                        }
+                    } catch (authError) {
+                        console.warn("Auth token error. Falling back to Anonymous Auth:", authError);
+                        await signInAnonymously(this.auth);
                     }
-                }
-                updateUI();
-            }, (error) => console.error("Error fetching team", error));
-        }
 
-        let unsubEmployeeLogs = null;
-        function setupEmployeeLogsListener(empId) {
-            if (unsubEmployeeLogs) unsubEmployeeLogs();
-            unsubEmployeeLogs = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'employees', empId, 'logs'), (snapshot) => {
-                state.currentEmployeeLogs = snapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data()
-                }));
-                updateUI();
-            }, (error) => console.error("Error fetching logs", error));
-        }
-
-        // --- Logic & Global Timer ---
-        let globalTimer;
-        function startGlobalTimer() {
-            if (globalTimer) clearInterval(globalTimer);
-            globalTimer = setInterval(() => {
-                const now = Date.now();
-                
-                // Refresh Top Clocks
-                const clockTime = document.getElementById('emp-clock-time');
-                const clockAmPm = document.getElementById('emp-clock-ampm');
-                const clockDate = document.getElementById('emp-current-date');
-                
-                const dateObj = new Date();
-                if (clockTime && clockAmPm) {
-                    const timeString = dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
-                    const parts = timeString.split(' ');
-                    clockTime.innerText = parts[0];
-                    clockAmPm.innerText = parts[1];
-                }
-                if (clockDate) {
-                    clockDate.innerText = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-                }
-
-                // Tick Active Hours (Employee)
-                if (state.selectedRole === 'EMPLOYEE' && state.currentEmployee) {
-                    let displaySeconds = state.currentEmployee.secondsWorked || 0;
-                    if (state.currentEmployee.status === 'IN' && state.currentEmployee.lastActionTimestamp) {
-                        displaySeconds += Math.floor((now - state.currentEmployee.lastActionTimestamp) / 1000);
-                    }
-                    const empHoursEl = document.getElementById('emp-worked-hours');
-                    if (empHoursEl) empHoursEl.innerText = formatDuration(displaySeconds) + ' Active';
-                }
-
-                // Tick Active Hours (Owner)
-                if (state.selectedRole === 'OWNER' && state.ownerActiveTab === 'LIVE') {
-                    state.teamEmployees.forEach(emp => {
-                        const timeEl = document.getElementById(`own-time-${emp.id}`);
-                        if (timeEl) {
-                            let displaySeconds = emp.secondsWorked || 0;
-                            if (emp.status === 'IN' && emp.lastActionTimestamp) {
-                                displaySeconds += Math.floor((now - emp.lastActionTimestamp) / 1000);
-                            }
-                            timeEl.innerText = formatDuration(displaySeconds);
+                    onAuthStateChanged(this.auth, (user) => {
+                        if (user) {
+                            this.user = user;
+                            document.getElementById('loading-screen').classList.add('hidden');
+                            this.loadEmployeesForRoleSelect();
                         }
                     });
+                } catch (error) {
+                    console.error("Firebase Init Error:", error);
+                    document.getElementById('loading-screen').innerHTML = `<p class="text-red-500">เกิดข้อผิดพลาดในการเชื่อมต่อระบบ</p>`;
                 }
-            }, 1000);
-        }
+            },
 
-        function formatDuration(totalSeconds) {
-            const h = Math.floor(totalSeconds / 3600);
-            const m = Math.floor((totalSeconds % 3600) / 60);
-            return `${h}h ${m}m`;
-        }
-        function formatTimeShort(timestamp) {
-            return new Date(timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
-        }
-        function friendlyActionName(type) {
-            if(!type) return 'No activity';
-            const map = {
-                'CLOCK_IN': 'Clocked In', 'CLOCK_OUT': 'Clocked Out',
-                'BREAK_START': 'Started Break', 'BREAK_END': 'Ended Break'
-            };
-            return map[type] || type.replace('_', ' ');
-        }
+            // --- PIN System & Login Flow ---
+            promptLogin: function(selectedRole) {
+                this.enteredPin = '';
+                this.pendingRole = selectedRole;
+                this.updatePinDots();
 
-        // --- Numpad & Navigation Handlers ---
-        window.handleNumClick = function(num) {
-            if (state.pinBuffer.length < 4) {
-                state.pinBuffer += num;
-                document.getElementById('pin-error').style.opacity = '0';
-                updatePinDots();
-                if (state.pinBuffer.length === 4) verifyPin();
-            }
-        };
-
-        window.handlePinDelete = function() {
-            state.pinBuffer = state.pinBuffer.slice(0, -1);
-            document.getElementById('pin-error').style.opacity = '0';
-            updatePinDots();
-        };
-
-        function updatePinDots() {
-            const dots = document.getElementById('pin-dots').children;
-            for (let i = 0; i < 4; i++) {
-                dots[i].className = `w-5 h-5 rounded-full transition-all duration-200 ${state.pinBuffer.length > i ? 'bg-indigo-600 scale-110' : 'bg-slate-200'}`;
-            }
-        }
-
-        function pinError() {
-            const dots = document.getElementById('pin-dots').children;
-            for (let i = 0; i < 4; i++) { dots[i].classList.replace('bg-indigo-600', 'bg-rose-500'); }
-            document.getElementById('pin-error').style.opacity = '1';
-            setTimeout(() => {
-                state.pinBuffer = '';
-                updatePinDots();
-            }, 500);
-        }
-
-        function verifyPin() {
-            if (state.pinBuffer === '8888') {
-                state.selectedRole = 'OWNER';
-                state.isUnlocked = true;
-                setTimeout(() => { initMainView(); showView('main'); }, 150);
-            } else {
-                // Check against Employee directory
-                const emp = state.teamEmployees.find(e => e.pin === state.pinBuffer);
-                if (emp) {
-                    state.selectedRole = 'EMPLOYEE';
-                    state.currentEmployee = emp;
-                    state.isUnlocked = true;
-                    setupEmployeeLogsListener(emp.id);
-                    setTimeout(() => { initMainView(); showView('main'); }, 150);
+                if (selectedRole === 'employee') {
+                    const empId = document.getElementById('employee-selector').value;
+                    if (!empId) {
+                        this.utils.showToast('กรุณาเลือกชื่อพนักงาน', 'error');
+                        return;
+                    }
+                    this.pendingEmp = this.employeesCache.find(e => e.id === empId);
+                    document.getElementById('pin-subtitle').textContent = `พนักงาน: ${this.pendingEmp.name}`;
                 } else {
-                    pinError();
+                    this.pendingEmp = null;
+                    document.getElementById('pin-subtitle').textContent = 'สำหรับเจ้าของร้าน / ผู้ดูแลระบบ';
                 }
-            }
-        }
 
-        window.logout = function() {
-            state.selectedRole = null;
-            state.isUnlocked = false;
-            state.currentEmployee = null;
-            state.currentEmployeeLogs = [];
-            state.pinBuffer = '';
-            if (unsubEmployeeLogs) { unsubEmployeeLogs(); unsubEmployeeLogs = null; }
-            updatePinDots();
-            showView('pin');
-        };
+                document.getElementById('modal-pin').classList.remove('hidden');
+            },
 
-        // --- Employee Action Engine ---
-        window.handleAction = async function(actionType) {
-            if (!state.user || !state.currentEmployee) return;
-            const now = Date.now();
-            const emp = state.currentEmployee;
+            addPinDigit: function(digit) {
+                if (this.enteredPin.length < 4) {
+                    this.enteredPin += digit;
+                    this.updatePinDots();
+                    
+                    if (this.enteredPin.length === 4) {
+                        setTimeout(() => this.verifyPin(), 100);
+                    }
+                }
+            },
 
-            let newStatus = emp.status;
-            let newSecondsWorked = emp.secondsWorked || 0;
-            
-            // Calculate time added during this 'IN' session
-            if (emp.status === 'IN' && emp.lastActionTimestamp) {
-                newSecondsWorked += Math.floor((now - emp.lastActionTimestamp) / 1000);
-            }
+            removePinDigit: function() {
+                if (this.enteredPin.length > 0) {
+                    this.enteredPin = this.enteredPin.slice(0, -1);
+                    this.updatePinDots();
+                }
+            },
 
-            if (actionType === 'CLOCK_IN' || actionType === 'BREAK_END') newStatus = 'IN';
-            if (actionType === 'CLOCK_OUT') newStatus = 'OUT';
-            if (actionType === 'BREAK_START') newStatus = 'BREAK';
+            updatePinDots: function() {
+                for (let i = 1; i <= 4; i++) {
+                    const dot = document.getElementById(`dot-${i}`);
+                    if (i <= this.enteredPin.length) {
+                        dot.classList.add('active');
+                    } else {
+                        dot.classList.remove('active');
+                    }
+                }
+            },
 
-            // Optimistic UI Update
-            state.currentEmployee.status = newStatus;
-            updateUI(); 
+            verifyPin: function() {
+                let isValid = false;
 
-            try {
-                // 1. Add individual timestamp log
-                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'employees', emp.id, 'logs'), { 
-                    type: actionType, 
-                    timestamp: now 
-                });
+                if (this.pendingRole === 'owner') {
+                    if (this.enteredPin === OWNER_MASTER_PIN) isValid = true;
+                } else if (this.pendingRole === 'employee') {
+                    const expectedPin = this.pendingEmp.pin || '0000'; // Fallback for old data
+                    if (this.enteredPin === expectedPin) isValid = true;
+                }
+
+                if (isValid) {
+                    this.closePinModal();
+                    this.completeLogin(this.pendingRole, this.pendingEmp);
+                } else {
+                    this.utils.showToast('รหัส PIN ไม่ถูกต้อง', 'error');
+                    this.enteredPin = '';
+                    this.updatePinDots();
+                    
+                    // Shake animation effect for error
+                    const modal = document.querySelector('#modal-pin > div');
+                    modal.classList.add('transform', 'translate-x-2');
+                    setTimeout(() => modal.classList.replace('translate-x-2', '-translate-x-2'), 100);
+                    setTimeout(() => modal.classList.replace('-translate-x-2', 'translate-x-0'), 200);
+                    setTimeout(() => modal.classList.remove('transform', 'translate-x-0'), 300);
+                }
+            },
+
+            closePinModal: function() {
+                document.getElementById('modal-pin').classList.add('hidden');
+                this.enteredPin = '';
+                this.pendingRole = null;
+                this.pendingEmp = null;
+            },
+
+            completeLogin: function(selectedRole, employeeObj) {
+                this.role = selectedRole;
+                this.currentEmp = employeeObj;
                 
-                // 2. Update parent employee doc
-                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'employees', emp.id), { 
-                    status: newStatus, 
-                    lastAction: friendlyActionName(actionType),
-                    lastActionTimestamp: now,
-                    secondsWorked: newSecondsWorked
+                if (selectedRole === 'employee') {
+                    document.getElementById('user-id-display').textContent = this.currentEmp.name;
+                    document.getElementById('user-role-display').textContent = 'พนักงาน';
+                    document.getElementById('user-avatar').textContent = this.currentEmp.name.charAt(0);
+                    
+                    document.getElementById('nav-employees').classList.add('hidden');
+                    document.getElementById('dashboard-owner').classList.add('hidden');
+                    document.getElementById('dashboard-employee').classList.remove('hidden');
+                    document.getElementById('hist-col-name').classList.add('hidden');
+                    
+                } else if (selectedRole === 'owner') {
+                    document.getElementById('user-id-display').textContent = 'Admin / เจ้าของร้าน';
+                    document.getElementById('user-role-display').textContent = 'จัดการระบบ';
+                    document.getElementById('user-avatar').textContent = 'A';
+                    
+                    document.getElementById('nav-employees').classList.remove('hidden');
+                    document.getElementById('dashboard-employee').classList.add('hidden');
+                    document.getElementById('dashboard-owner').classList.remove('hidden');
+                    document.getElementById('hist-col-name').classList.remove('hidden');
+                }
+
+                document.getElementById('view-role-selection').classList.add('hidden');
+                document.getElementById('app-container').classList.remove('hidden');
+                
+                this.switchView('dashboard');
+                this.setupTodayListener();
+            },
+
+            // --- Role Management ---
+            showRoleScreen: function() {
+                document.getElementById('app-container').classList.add('hidden');
+                document.getElementById('view-role-selection').classList.remove('hidden');
+                this.role = null;
+                this.currentEmp = null;
+                if(this.unsubscribeToday) {
+                    this.unsubscribeToday();
+                    this.unsubscribeToday = null;
+                }
+                // Refresh list on logout
+                this.loadEmployeesForRoleSelect();
+            },
+
+            loadEmployeesForRoleSelect: async function() {
+                const selector = document.getElementById('employee-selector');
+                selector.innerHTML = '<option value="">-- กำลังโหลด... --</option>';
+
+                try {
+                    const empRef = collection(this.db, 'artifacts', appId, 'users', this.user.uid, 'employees');
+                    const snapshot = await getDocs(empRef);
+                    this.employeesCache = [];
+                    
+                    snapshot.forEach(doc => {
+                        this.employeesCache.push({ id: doc.id, ...doc.data() });
+                    });
+                    this.employeesCache.sort((a, b) => a.code.localeCompare(b.code));
+
+                    if (this.employeesCache.length === 0) {
+                        selector.innerHTML = '<option value="">-- ยังไม่มีพนักงาน (ให้เจ้าของร้านเพิ่มก่อน) --</option>';
+                    } else {
+                        selector.innerHTML = '<option value="">-- เลือกชื่อพนักงาน --</option>';
+                        this.employeesCache.forEach(emp => {
+                            selector.innerHTML += `<option value="${emp.id}">${emp.code} : ${emp.name}</option>`;
+                        });
+                    }
+                    document.getElementById('view-role-selection').classList.remove('hidden');
+                } catch (error) {
+                    console.error("Error loading employees for role:", error);
+                    selector.innerHTML = '<option value="">-- โหลดล้มเหลว --</option>';
+                }
+            },
+
+            // --- UI Navigation ---
+            switchView: function(viewId) {
+                this.currentView = viewId;
+                
+                document.querySelectorAll('.app-view').forEach(el => el.classList.add('hidden'));
+                document.querySelectorAll('.nav-btn').forEach(el => {
+                    el.classList.remove('bg-dark-800', 'text-white');
+                    el.classList.add('text-gray-400');
                 });
-            } catch (err) {
-                console.error("Action error", err);
-            }
-        };
 
-        // --- Owner UI Navigation ---
-        window.switchOwnerTab = function(tab) {
-            state.ownerActiveTab = tab;
-            
-            const btnLive = document.getElementById('nav-btn-live');
-            const btnTeam = document.getElementById('nav-btn-team');
-            const tabLive = document.getElementById('owner-tab-live');
-            const tabTeam = document.getElementById('owner-tab-team');
-            const fab = document.getElementById('own-fab-add');
+                document.getElementById(`view-${viewId}`).classList.remove('hidden');
+                
+                const activeNav = document.getElementById(`nav-${viewId}`);
+                if(activeNav) {
+                    activeNav.classList.remove('text-gray-400');
+                    activeNav.classList.add('bg-dark-800', 'text-white');
+                }
 
-            if (tab === 'LIVE') {
-                btnLive.className = "flex-1 flex flex-col items-center gap-1.5 text-indigo-600 transition-colors scale-105";
-                btnTeam.className = "flex-1 flex flex-col items-center gap-1.5 text-slate-400 hover:text-slate-600 transition-colors";
-                tabLive.classList.replace('tab-hidden', 'tab-active');
-                tabTeam.classList.replace('tab-active', 'tab-hidden');
-                if (fab) fab.classList.add('hidden');
-            } else {
-                btnTeam.className = "flex-1 flex flex-col items-center gap-1.5 text-indigo-600 transition-colors scale-105";
-                btnLive.className = "flex-1 flex flex-col items-center gap-1.5 text-slate-400 hover:text-slate-600 transition-colors";
-                tabTeam.classList.replace('tab-hidden', 'tab-active');
-                tabLive.classList.replace('tab-active', 'tab-hidden');
-                if (fab) fab.classList.remove('hidden');
-            }
-            updateUI();
-        };
+                if (viewId === 'dashboard') {
+                    document.getElementById('view-title').textContent = 'หน้าหลัก';
+                } else if (viewId === 'history') {
+                    document.getElementById('view-title').textContent = 'ประวัติการทำงาน';
+                    this.loadHistory();
+                } else if (viewId === 'employees') {
+                    document.getElementById('view-title').textContent = 'จัดการพนักงาน';
+                    this.loadEmployees();
+                }
+            },
 
-        // --- Owner Modal Engine ---
-        window.openModal = function(empStr = null) {
-            const emp = empStr ? JSON.parse(decodeURIComponent(empStr)) : null;
-            state.editingEmployeeId = emp ? emp.id : null;
-            
-            document.getElementById('modal-title').innerText = emp ? 'Edit Employee' : 'New Employee';
-            document.getElementById('form-emp-id').value = emp ? emp.id : '';
-            document.getElementById('form-emp-name').value = emp ? emp.name : '';
-            document.getElementById('form-emp-role').value = emp ? emp.role : '';
-            document.getElementById('form-emp-pin').value = emp ? (emp.pin || '') : '';
-            
-            document.getElementById('form-btn-submit').innerText = emp ? 'Save Changes' : 'Add Employee';
-            
-            const delBtn = document.getElementById('form-btn-delete');
-            if (emp) {
-                delBtn.classList.remove('hidden');
-                delBtn.classList.add('flex');
-            } else {
-                delBtn.classList.remove('flex');
-                delBtn.classList.add('hidden');
-            }
+            // --- Live Clock ---
+            startClock: function() {
+                const updateTime = () => {
+                    const now = new Date();
+                    document.getElementById('live-time').textContent = now.toLocaleTimeString('th-TH', { hour12: false });
+                    document.getElementById('live-date').textContent = this.utils.formatThaiDateFull(now);
+                    
+                    const todayStr = this.utils.formatDateStr(now);
+                    if (this.todayDocId && this.todayDocId !== todayStr && this.role) {
+                        this.setupTodayListener(); 
+                    }
+                };
+                updateTime();
+                setInterval(updateTime, 1000);
+            },
 
-            showView('modal');
-        };
+            // --- Firestore Operations ---
+            setupTodayListener: function() {
+                if (!this.user || !this.role) return;
+                if (this.unsubscribeToday) this.unsubscribeToday();
 
-        window.closeModal = function() {
-            showView('main');
-        };
+                const now = new Date();
+                this.todayDocId = this.utils.formatDateStr(now);
+                
+                if (this.role === 'employee') {
+                    const logId = `${this.todayDocId}_${this.currentEmp.id}`;
+                    const todayRef = doc(this.db, 'artifacts', appId, 'users', this.user.uid, 'time_logs', logId);
 
-        document.getElementById('employee-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            if (!state.user) return;
-            
-            const id = document.getElementById('form-emp-id').value;
-            const data = {
-                name: document.getElementById('form-emp-name').value,
-                role: document.getElementById('form-emp-role').value,
-                pin: document.getElementById('form-emp-pin').value
-            };
-
-            if(data.pin.length !== 4) {
-                alert("PIN must be exactly 4 digits.");
-                return;
-            }
-
-            closeModal();
-
-            try {
-                if (id) {
-                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'employees', id), data);
-                } else {
-                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'employees'), {
-                        ...data, status: 'OUT', secondsWorked: 0, lastAction: 'Account Created', createdAt: Date.now()
+                    this.unsubscribeToday = onSnapshot(todayRef, (docSnap) => {
+                        this.updateEmployeeDashboard(docSnap.exists() ? docSnap.data() : null);
+                    }, (error) => {
+                        console.error("Error listening to today's data:", error);
+                    });
+                } else if (this.role === 'owner') {
+                    const logsRef = collection(this.db, 'artifacts', appId, 'users', this.user.uid, 'time_logs');
+                    this.unsubscribeToday = onSnapshot(logsRef, (snapshot) => {
+                        let todayLogs = [];
+                        snapshot.forEach(doc => {
+                            const data = doc.data();
+                            if (data.dateStr === this.todayDocId) todayLogs.push(data);
+                        });
+                        this.updateOwnerDashboard(todayLogs);
+                    }, (error) => {
+                        console.error("Error listening to all logs:", error);
                     });
                 }
-            } catch (err) { console.error("Error saving employee", err); }
-        });
+            },
 
-        window.deleteCurrentEmployee = async function() {
-            if (!state.editingEmployeeId || !state.user) return;
-            // Native confirm is still safest to prevent accidental deletion
-            if (confirm("Permanently delete this employee?")) {
-                const id = state.editingEmployeeId;
-                closeModal();
+            updateEmployeeDashboard: function(data) {
+                const btnIn = document.getElementById('btn-checkin');
+                const btnOut = document.getElementById('btn-checkout');
+                const msgCompleted = document.getElementById('msg-completed');
+                const badge = document.getElementById('today-status-badge');
+                
+                const timeInEl = document.getElementById('time-in-display');
+                const timeOutEl = document.getElementById('time-out-display');
+                const activityList = document.getElementById('today-activity-list');
+
+                btnIn.classList.add('hidden');
+                btnOut.classList.add('hidden');
+                msgCompleted.classList.add('hidden');
+                badge.className = "inline-block px-3 py-1 rounded-full text-sm font-medium";
+                activityList.innerHTML = '';
+
+                let activitiesHtml = '';
+
+                if (!data) {
+                    btnIn.classList.remove('hidden');
+                    badge.classList.add('bg-gray-100', 'text-gray-600');
+                    badge.textContent = 'ยังไม่เข้างาน';
+                    timeInEl.textContent = '--:--';
+                    timeOutEl.textContent = '--:--';
+                    activitiesHtml = '<div class="p-4 text-center text-gray-500 text-sm">ยังไม่มีกิจกรรม</div>';
+                } else {
+                    const checkInTime = data.checkIn ? data.checkIn.toDate() : null;
+                    const checkOutTime = data.checkOut ? data.checkOut.toDate() : null;
+
+                    timeInEl.textContent = this.utils.formatTime(checkInTime);
+                    timeOutEl.textContent = this.utils.formatTime(checkOutTime);
+
+                    if (checkInTime) {
+                        activitiesHtml += `
+                            <div class="p-4 flex justify-between items-center bg-white">
+                                <div class="flex items-center">
+                                    <div class="w-2 h-2 rounded-full bg-brand-500 mr-3"></div>
+                                    <span class="text-gray-700">บันทึกเข้างาน</span>
+                                </div>
+                                <span class="text-sm font-medium text-gray-900">${this.utils.formatTime(checkInTime)} น.</span>
+                            </div>`;
+                    }
+
+                    if (!data.checkOut) {
+                        btnOut.classList.remove('hidden');
+                        badge.classList.add('bg-blue-100', 'text-blue-700');
+                        badge.textContent = 'กำลังทำงาน';
+                    } else {
+                        msgCompleted.classList.remove('hidden');
+                        badge.classList.add('bg-brand-100', 'text-brand-700');
+                        badge.textContent = 'เลิกงานแล้ว';
+                        activitiesHtml += `
+                            <div class="p-4 flex justify-between items-center bg-white">
+                                <div class="flex items-center">
+                                    <div class="w-2 h-2 rounded-full bg-flat-red mr-3"></div>
+                                    <span class="text-gray-700">บันทึกออกงาน</span>
+                                </div>
+                                <span class="text-sm font-medium text-gray-900">${this.utils.formatTime(checkOutTime)} น.</span>
+                            </div>`;
+                    }
+                }
+                if(activitiesHtml !== '') activityList.innerHTML = activitiesHtml;
+            },
+
+            updateOwnerDashboard: function(todayLogs) {
+                const tbody = document.getElementById('owner-today-table');
+                
+                if (this.employeesCache.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" class="px-6 py-8 text-center text-gray-500">ยังไม่มีพนักงานในระบบ</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = '';
+                this.employeesCache.forEach(emp => {
+                    const log = todayLogs.find(l => l.empId === emp.id);
+                    const tr = document.createElement('tr');
+                    tr.className = "hover:bg-gray-50";
+
+                    let timeIn = '-';
+                    let timeOut = '-';
+                    let statusHtml = '<span class="inline-block px-2 py-1 text-xs rounded bg-gray-100 text-gray-600">ยังไม่เข้างาน</span>';
+
+                    if (log) {
+                        timeIn = log.checkIn ? this.utils.formatTime(log.checkIn.toDate()) : '-';
+                        timeOut = log.checkOut ? this.utils.formatTime(log.checkOut.toDate()) : '-';
+                        
+                        if (log.status === 'working') {
+                            statusHtml = '<span class="inline-block px-2 py-1 text-xs rounded bg-blue-100 text-blue-700">กำลังทำงาน</span>';
+                        } else if (log.status === 'completed') {
+                            statusHtml = '<span class="inline-block px-2 py-1 text-xs rounded bg-brand-100 text-brand-700">เลิกงานแล้ว</span>';
+                        }
+                    }
+
+                    tr.innerHTML = `
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${emp.name} <span class="text-xs text-gray-400 ml-1">(${emp.code})</span></td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${timeIn}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${timeOut}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right">${statusHtml}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            },
+
+            handleCheckIn: async function() {
+                if (!this.user || !this.todayDocId || !this.currentEmp) return;
                 try {
-                    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'employees', id));
-                } catch (err) { console.error("Error deleting", err); }
+                    const btn = document.getElementById('btn-checkin');
+                    btn.disabled = true;
+                    btn.innerHTML = 'กำลังบันทึก...';
+
+                    const logId = `${this.todayDocId}_${this.currentEmp.id}`;
+                    const docRef = doc(this.db, 'artifacts', appId, 'users', this.user.uid, 'time_logs', logId);
+                    
+                    await setDoc(docRef, {
+                        dateStr: this.todayDocId,
+                        empId: this.currentEmp.id,
+                        empName: this.currentEmp.name,
+                        checkIn: serverTimestamp(),
+                        checkOut: null,
+                        status: 'working'
+                    });
+
+                    this.utils.showToast("บันทึกเวลาเข้างานสำเร็จ");
+                } catch (error) {
+                    console.error("Check-in error:", error);
+                    this.utils.showToast("เกิดข้อผิดพลาดในการบันทึก", "error");
+                    document.getElementById('btn-checkin').disabled = false;
+                    document.getElementById('btn-checkin').innerHTML = 'เข้างาน';
+                }
+            },
+
+            handleCheckOut: async function() {
+                if (!this.user || !this.todayDocId || !this.currentEmp) return;
+                try {
+                    const btn = document.getElementById('btn-checkout');
+                    btn.disabled = true;
+                    btn.innerHTML = 'กำลังบันทึก...';
+
+                    const logId = `${this.todayDocId}_${this.currentEmp.id}`;
+                    const docRef = doc(this.db, 'artifacts', appId, 'users', this.user.uid, 'time_logs', logId);
+                    
+                    await updateDoc(docRef, {
+                        checkOut: serverTimestamp(),
+                        status: 'completed'
+                    });
+
+                    this.utils.showToast("บันทึกเวลาออกงานสำเร็จ");
+                } catch (error) {
+                    console.error("Check-out error:", error);
+                    this.utils.showToast("เกิดข้อผิดพลาดในการบันทึก", "error");
+                    document.getElementById('btn-checkout').disabled = false;
+                    document.getElementById('btn-checkout').innerHTML = 'ออกงาน';
+                }
+            },
+
+            loadHistory: async function() {
+                if (!this.user) return;
+                
+                const tbody = document.getElementById('history-table-body');
+                const colCount = this.role === 'owner' ? 5 : 4;
+                tbody.innerHTML = `<tr><td colspan="${colCount}" class="px-6 py-8 text-center text-gray-500">กำลังโหลดข้อมูล...</td></tr>`;
+
+                try {
+                    const logsRef = collection(this.db, 'artifacts', appId, 'users', this.user.uid, 'time_logs');
+                    const snapshot = await getDocs(logsRef);
+                    
+                    let logs = [];
+                    snapshot.forEach(doc => {
+                        const data = doc.data();
+                        if (this.role === 'owner' || (this.role === 'employee' && data.empId === this.currentEmp.id)) {
+                            logs.push({ id: doc.id, ...data });
+                        }
+                    });
+
+                    logs.sort((a, b) => b.id.localeCompare(a.id));
+
+                    if (logs.length === 0) {
+                        tbody.innerHTML = `<tr><td colspan="${colCount}" class="px-6 py-8 text-center text-gray-500">ไม่มีประวัติการบันทึกเวลา</td></tr>`;
+                        return;
+                    }
+
+                    tbody.innerHTML = '';
+                    logs.forEach(log => {
+                        const tr = document.createElement('tr');
+                        tr.className = "hover:bg-gray-50 transition-colors";
+                        
+                        const dateParts = log.dateStr ? log.dateStr.split('-') : log.id.split('_')[0].split('-');
+                        const displayDate = `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`;
+                        
+                        const timeIn = log.checkIn ? this.utils.formatTime(log.checkIn.toDate()) : '-';
+                        const timeOut = log.checkOut ? this.utils.formatTime(log.checkOut.toDate()) : '-';
+                        
+                        let statusHtml = '';
+                        if (log.status === 'working') statusHtml = '<span class="inline-block px-2 py-1 text-xs rounded bg-blue-100 text-blue-700">กำลังทำงาน</span>';
+                        else if (log.status === 'completed') statusHtml = '<span class="inline-block px-2 py-1 text-xs rounded bg-brand-100 text-brand-700">เลิกงานแล้ว</span>';
+                        else statusHtml = '<span class="inline-block px-2 py-1 text-xs rounded bg-gray-100 text-gray-700">ไม่ทราบ</span>';
+
+                        let nameColHtml = this.role === 'owner' ? `<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">${log.empName || '-'}</td>` : '';
+
+                        tr.innerHTML = `
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${displayDate}</td>
+                            ${nameColHtml}
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${timeIn}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${timeOut}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-right">${statusHtml}</td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+                } catch (error) {
+                    console.error("Error loading history:", error);
+                    tbody.innerHTML = `<tr><td colspan="${colCount}" class="px-6 py-8 text-center text-red-500">เกิดข้อผิดพลาดในการโหลดข้อมูล</td></tr>`;
+                }
+            },
+
+            // --- Employee Management ---
+            openAddEmployeeModal: function() {
+                document.getElementById('form-add-employee').reset();
+                document.getElementById('modal-add-employee').classList.remove('hidden');
+            },
+
+            closeAddEmployeeModal: function() {
+                document.getElementById('modal-add-employee').classList.add('hidden');
+            },
+
+            saveEmployee: async function(e) {
+                e.preventDefault();
+                if (!this.user) return;
+
+                const btn = document.getElementById('btn-save-employee');
+                const code = document.getElementById('emp-code').value.trim();
+                const name = document.getElementById('emp-name').value.trim();
+                const position = document.getElementById('emp-position').value.trim();
+                const pin = document.getElementById('emp-pin').value.trim() || '0000';
+
+                if (!code || !name) return;
+
+                try {
+                    btn.disabled = true;
+                    btn.innerHTML = 'กำลังบันทึก...';
+
+                    const empRef = collection(this.db, 'artifacts', appId, 'users', this.user.uid, 'employees');
+                    await addDoc(empRef, { code, name, position, pin, createdAt: serverTimestamp() });
+
+                    this.utils.showToast('เพิ่มพนักงานสำเร็จ');
+                    this.closeAddEmployeeModal();
+                    this.loadEmployees(); 
+
+                } catch (error) {
+                    console.error("Error saving employee:", error);
+                    this.utils.showToast('เกิดข้อผิดพลาดในการบันทึก', 'error');
+                } finally {
+                    btn.disabled = false;
+                    btn.innerHTML = 'บันทึกข้อมูล';
+                }
+            },
+
+            loadEmployees: async function() {
+                if (!this.user) return;
+                
+                const tbody = document.getElementById('employees-table-body');
+                tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-8 text-center text-gray-500">กำลังโหลดข้อมูล...</td></tr>';
+
+                try {
+                    const empRef = collection(this.db, 'artifacts', appId, 'users', this.user.uid, 'employees');
+                    const snapshot = await getDocs(empRef);
+                    
+                    let employees = [];
+                    snapshot.forEach(doc => employees.push({ id: doc.id, ...doc.data() }));
+                    employees.sort((a, b) => a.code.localeCompare(b.code));
+                    this.employeesCache = employees;
+
+                    if (employees.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-8 text-center text-gray-500">ยังไม่มีข้อมูลพนักงาน<br><span class="text-xs text-gray-400">คลิก "เพิ่มพนักงาน" เพื่อเริ่มต้น</span></td></tr>';
+                        return;
+                    }
+
+                    tbody.innerHTML = '';
+                    employees.forEach(emp => {
+                        const tr = document.createElement('tr');
+                        tr.className = "hover:bg-gray-50 transition-colors";
+                        tr.innerHTML = `
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${emp.code}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">${emp.name}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${emp.position || '-'}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-brand-600">${emp.pin || '0000'}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-right">
+                                <button onclick="app.deleteEmployee('${emp.id}')" class="text-flat-red hover:text-red-700 text-sm font-medium">ลบ</button>
+                            </td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+
+                } catch (error) {
+                    console.error("Error loading employees:", error);
+                    tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-8 text-center text-red-500">เกิดข้อผิดพลาดในการโหลดข้อมูล</td></tr>';
+                }
+            },
+
+            deleteEmployee: async function(empId) {
+                if (!this.user) return;
+                try {
+                    const empDocRef = doc(this.db, 'artifacts', appId, 'users', this.user.uid, 'employees', empId);
+                    await deleteDoc(empDocRef);
+                    this.utils.showToast('ลบพนักงานสำเร็จ');
+                    this.loadEmployees(); 
+                } catch (error) {
+                    console.error("Error deleting employee:", error);
+                    this.utils.showToast('เกิดข้อผิดพลาดในการลบ', 'error');
+                }
             }
         };
 
-        // --- Core UI Renderers ---
-        function renderNumpad() {
-            const pad = document.querySelector('#view-pin .bg-white.grid');
-            let html = '';
-            const btnClass = "aspect-square w-full max-w-[5rem] mx-auto rounded-full flex items-center justify-center text-3xl sm:text-4xl font-medium text-slate-800 bg-slate-50 hover:bg-indigo-50 active:bg-indigo-100 active:scale-95 transition-all";
-            
-            for(let i=1; i<=9; i++) {
-                html += `<button onclick="handleNumClick('${i}')" class="${btnClass}">${i}</button>`;
-            }
-            html += `<div></div>`;
-            html += `<button onclick="handleNumClick('0')" class="${btnClass}">0</button>`;
-            html += `<button onclick="handlePinDelete()" class="aspect-square w-full max-w-[5rem] mx-auto rounded-full flex items-center justify-center text-slate-500 bg-slate-50 hover:bg-rose-50 active:bg-rose-100 active:scale-95 transition-all"><i class="fa-solid fa-delete-left text-2xl"></i></button>`;
-            pad.innerHTML = html;
-        }
-
-        function initMainView() {
-            if (state.selectedRole === 'OWNER') {
-                document.getElementById('interface-employee').classList.replace('tab-active', 'tab-hidden');
-                document.getElementById('interface-owner').classList.replace('tab-hidden', 'tab-active');
-            } else {
-                document.getElementById('interface-owner').classList.replace('tab-active', 'tab-hidden');
-                document.getElementById('interface-employee').classList.replace('tab-hidden', 'tab-active');
-            }
-            updateUI();
-        }
-
-        function updateUI() {
-            if (!state.isUnlocked) return;
-            if (state.selectedRole === 'EMPLOYEE') renderEmployeeUI();
-            if (state.selectedRole === 'OWNER') renderOwnerUI();
-        }
-
-        function renderEmployeeUI() {
-            if (!state.currentEmployee) return;
-            const emp = state.currentEmployee;
-
-            const statusBadge = document.getElementById('emp-status-badge');
-            const clockRing = document.getElementById('emp-clock-ring');
-            const actionBtns = document.getElementById('emp-action-buttons');
-            const logsContainer = document.getElementById('emp-logs-container');
-
-            document.getElementById('emp-profile-name').innerText = emp.name;
-            document.getElementById('emp-avatar-initial').innerText = emp.name.charAt(0).toUpperCase();
-
-            const isOut = emp.status === 'OUT';
-            const isIn = emp.status === 'IN';
-            const isBreak = emp.status === 'BREAK';
-
-            statusBadge.innerText = emp.status;
-            if (isIn) {
-                statusBadge.className = "px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider bg-green-100 text-green-700 shadow-inner";
-                clockRing.classList.remove('hidden');
-            } else if (isBreak) {
-                statusBadge.className = "px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider bg-amber-100 text-amber-700 shadow-inner";
-                clockRing.classList.add('hidden');
-            } else {
-                statusBadge.className = "px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider bg-slate-200 text-slate-600 shadow-inner";
-                clockRing.classList.add('hidden');
-            }
-
-            // Massive Thumb-Friendly Punch Buttons
-            let btnsHtml = '';
-            if (isOut) {
-                btnsHtml = `<button onclick="handleAction('CLOCK_IN')" class="w-full h-16 bg-indigo-600 active:bg-indigo-700 text-white rounded-[1rem] font-bold text-xl flex items-center justify-center gap-3 shadow-[0_8px_20px_rgba(79,70,229,0.3)] transition-transform active:scale-[0.98]"><i class="fa-solid fa-play"></i> Clock In</button>`;
-            } else if (isIn) {
-                btnsHtml = `
-                    <div class="flex gap-3">
-                        <button onclick="handleAction('CLOCK_OUT')" class="flex-1 h-16 bg-rose-500 active:bg-rose-600 text-white rounded-[1rem] font-bold text-lg flex items-center justify-center gap-2 shadow-[0_8px_20px_rgba(244,63,94,0.3)] transition-transform active:scale-[0.98]"><i class="fa-solid fa-square"></i> Clock Out</button>
-                        <button onclick="handleAction('BREAK_START')" class="flex-1 h-16 bg-white border-2 border-slate-200 active:bg-slate-50 text-slate-700 rounded-[1rem] font-bold text-lg flex items-center justify-center gap-2 transition-transform active:scale-[0.98]"><i class="fa-solid fa-mug-hot text-amber-600"></i> Break</button>
-                    </div>
-                `;
-            } else if (isBreak) {
-                btnsHtml = `<button onclick="handleAction('BREAK_END')" class="w-full h-16 bg-amber-500 active:bg-amber-600 text-white rounded-[1rem] font-bold text-xl flex items-center justify-center gap-3 shadow-[0_8px_20px_rgba(245,158,11,0.3)] transition-transform active:scale-[0.98]"><i class="fa-solid fa-play"></i> Resume Work</button>`;
-            }
-            actionBtns.innerHTML = btnsHtml;
-
-            const sorted = [...(state.currentEmployeeLogs || [])].sort((a, b) => b.timestamp - a.timestamp);
-            
-            if (sorted.length === 0) {
-                logsContainer.innerHTML = `<div class="p-6 text-center text-sm text-slate-400 font-medium">No activity recorded today.</div>`;
-            } else {
-                let logsHtml = '';
-                sorted.slice(0, 5).forEach(log => {
-                    let icon = 'fa-clock text-slate-400';
-                    if (log.type === 'CLOCK_IN' || log.type === 'BREAK_END') icon = 'fa-play text-green-500';
-                    if (log.type === 'CLOCK_OUT') icon = 'fa-square text-rose-500';
-                    if (log.type === 'BREAK_START') icon = 'fa-mug-hot text-amber-500';
-
-                    logsHtml += `
-                        <div class="p-4 flex items-center justify-between">
-                            <div class="flex items-center gap-3">
-                                <div class="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center"><i class="fa-solid ${icon}"></i></div>
-                                <span class="text-sm font-bold text-slate-700">${friendlyActionName(log.type)}</span>
-                            </div>
-                            <span class="text-xs font-mono font-medium bg-slate-100 px-2 py-1 rounded text-slate-500">${formatTimeShort(log.timestamp)}</span>
-                        </div>
-                    `;
-                });
-                logsContainer.innerHTML = logsHtml;
-            }
-        }
-
-        function renderOwnerUI() {
-            const allStaff = state.teamEmployees;
-
-            if (state.ownerActiveTab === 'LIVE') {
-                const activeCount = allStaff.filter(e => e.status === 'IN').length;
-                document.getElementById('own-active-count').innerText = activeCount;
-                document.getElementById('own-total-count').innerText = `/ ${allStaff.length}`;
-
-                let html = '';
-                allStaff.forEach(emp => {
-                    let borderClass = 'border-slate-100 text-slate-400 bg-white';
-                    let statusColor = 'text-slate-400';
-                    if(emp.status === 'IN') { borderClass = 'border-green-500 text-green-700 bg-green-50'; statusColor = 'text-green-600'; }
-                    if(emp.status === 'BREAK') { borderClass = 'border-amber-400 text-amber-700 bg-amber-50'; statusColor = 'text-amber-500'; }
-
-                    let displaySeconds = emp.secondsWorked || 0;
-                    if (emp.status === 'IN' && emp.lastActionTimestamp) {
-                        displaySeconds += Math.floor((Date.now() - emp.lastActionTimestamp) / 1000);
-                    }
-
-                    html += `
-                    <div class="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4">
-                        <div class="w-14 h-14 rounded-full flex flex-col items-center justify-center shrink-0 border-[3px] ${borderClass}">
-                            <span class="font-bold text-xl leading-none">${emp.name.charAt(0).toUpperCase()}</span>
-                        </div>
-                        <div class="flex-1 min-w-0">
-                            <p class="font-bold text-lg text-slate-900 truncate leading-tight">${emp.name}</p>
-                            <p class="text-xs text-slate-500 truncate mt-0.5">${emp.lastAction || 'Account Created'}</p>
-                        </div>
-                        <div class="text-right shrink-0">
-                            <p class="text-xs font-bold uppercase tracking-wider ${statusColor} mb-1">${emp.status}</p>
-                            <p id="own-time-${emp.id}" class="text-base font-mono font-bold text-slate-700 bg-slate-50 px-2 py-0.5 rounded-md">${formatDuration(displaySeconds)}</p>
-                        </div>
-                    </div>`;
-                });
-
-                if (allStaff.length === 0) {
-                    html = `<div class="p-8 text-center text-slate-500 flex flex-col items-center mt-10"><div class="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mb-4"><i class="fa-solid fa-users-slash text-3xl text-slate-300"></i></div> <p class="font-medium">No team members.</p><p class="text-sm mt-1">Go to Directory to add staff.</p></div>`;
-                }
-
-                document.getElementById('own-live-list').innerHTML = html;
-            } else {
-                let html = '';
-                allStaff.forEach(emp => {
-                    const empJson = encodeURIComponent(JSON.stringify(emp));
-                    html += `
-                    <div class="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm flex items-center justify-between gap-4">
-                        <div class="flex items-center gap-4 flex-1 min-w-0">
-                            <div class="w-12 h-12 rounded-full bg-indigo-50 flex items-center justify-center font-bold text-lg text-indigo-600 shrink-0">
-                                ${emp.name.charAt(0).toUpperCase()}
-                            </div>
-                            <div class="min-w-0">
-                                <p class="font-bold text-slate-900 text-lg leading-tight truncate">${emp.name}</p>
-                                <p class="text-xs font-medium text-slate-500 truncate mt-0.5">${emp.role}</p>
-                            </div>
-                        </div>
-                        <div class="flex items-center gap-3 shrink-0">
-                            <div class="flex flex-col items-end">
-                                <span class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">PIN</span>
-                                <span class="font-mono text-sm font-bold text-slate-700">${emp.pin}</span>
-                            </div>
-                            <button onclick="openModal('${empJson}')" class="w-12 h-12 rounded-2xl flex items-center justify-center text-indigo-500 bg-indigo-50 active:bg-indigo-100 transition-colors">
-                                <i class="fa-solid fa-pen"></i>
-                            </button>
-                        </div>
-                    </div>`;
-                });
-
-                if (allStaff.length === 0) {
-                    html = `<div class="p-8 text-center text-slate-500 flex flex-col items-center mt-10"><div class="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mb-4"><i class="fa-solid fa-users text-3xl text-slate-300"></i></div> <p class="font-medium">Directory is empty.</p><p class="text-sm mt-1">Tap the plus button below to add staff.</p></div>`;
-                }
-
-                document.getElementById('own-team-list').innerHTML = html;
-            }
-        }
-
-        initAuth();
-
+        // Boot App
+        window.onload = () => {
+            app.init();
+        };
     </script>
 </body>
 </html>
