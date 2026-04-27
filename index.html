@@ -1,680 +1,800 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  Clock, Play, Square, Coffee, History, User, LogOut, 
-  CheckCircle2, Users, Briefcase, ChevronRight, 
-  Loader2, Cloud, ShieldCheck, ArrowRight, Lock, Delete, ArrowLeft,
-  Plus, Edit2, Trash2, X, Activity
-} from 'lucide-react';
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>TimeTracker Mobile</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
-// --- Firebase Imports ---
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, doc, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
+    <style>
+        /* Hide scrollbar for a cleaner mobile app look */
+        ::-webkit-scrollbar { width: 0px; background: transparent; }
+        
+        /* View Management Classes */
+        .view-hidden { display: none !important; }
+        .view-active { display: flex !important; }
+        .tab-hidden { display: none !important; }
+        .tab-active { display: block !important; }
 
-// --- Firebase Setup ---
-const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-
-export default function App() {
-  // --- Auth & Role State ---
-  const [user, setUser] = useState(null);
-  const [authLoading, setAuthLoading] = useState(true);
-  
-  // Navigation State
-  const [selectedRole, setSelectedRole] = useState(null); // 'EMPLOYEE' | 'OWNER' | null
-  const [isUnlocked, setIsUnlocked] = useState(false);
-
-  // --- Current User State (Private - Synced to Firestore) ---
-  const [currentTime, setCurrentTime] = useState(new Date());
-  const [userStatus, setUserStatus] = useState('OUT');
-  const [userLogs, setUserLogs] = useState([]);
-  const [userWorkedSeconds, setUserWorkedSeconds] = useState(0);
-
-  // --- Team State (Public - Synced to Firestore) ---
-  const [teamEmployees, setTeamEmployees] = useState([]);
-
-  // --- 1. Authentication ---
-  useEffect(() => {
-    const initAuth = async () => {
-      try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
-        } else {
-          await signInAnonymously(auth);
+        /* Smooth Transitions */
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
-      } catch (error) {
-        console.error('Authentication Error:', error);
-      }
-    };
-    initAuth();
+    </style>
+</head>
+<body class="bg-slate-200 h-screen w-screen flex items-center justify-center font-sans text-slate-900 overflow-hidden">
 
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      setAuthLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  // --- 2. Firestore Real-time Sync ---
-  useEffect(() => {
-    if (!user) return;
-
-    const logsRef = collection(db, 'artifacts', appId, 'users', user.uid, 'logs');
-    const unsubLogs = onSnapshot(logsRef, (snapshot) => {
-      const fetchedLogs = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        timestamp: new Date(doc.data().timestamp)
-      }));
-      setUserLogs(fetchedLogs);
-    }, (error) => console.error("Error fetching logs:", error));
-
-    const statusRef = doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'currentStatus');
-    const unsubStatus = onSnapshot(statusRef, (docSnap) => {
-      if (docSnap.exists()) {
-        setUserStatus(docSnap.data().status);
-      } else {
-        setUserStatus('OUT');
-      }
-    }, (error) => console.error("Error fetching status:", error));
-
-    const teamRef = collection(db, 'artifacts', appId, 'public', 'data', 'employees');
-    const unsubTeam = onSnapshot(teamRef, (snapshot) => {
-      const fetchedTeam = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setTeamEmployees(fetchedTeam);
-    }, (error) => console.error("Error fetching team:", error));
-
-    return () => {
-      unsubLogs();
-      unsubStatus();
-      unsubTeam();
-    };
-  }, [user]);
-
-  // --- 3. Global Clock ---
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  // --- 4. Real-time Worked Hours Calculation ---
-  useEffect(() => {
-    let total = 0;
-    let currentStartTime = null;
-
-    const sortedLogs = [...userLogs].sort((a, b) => a.timestamp - b.timestamp);
-
-    sortedLogs.forEach((log) => {
-      if (log.type === 'CLOCK_IN' || log.type === 'BREAK_END') {
-        currentStartTime = log.timestamp;
-      } else if (log.type === 'CLOCK_OUT' || log.type === 'BREAK_START') {
-        if (currentStartTime) {
-          total += Math.floor((log.timestamp - currentStartTime) / 1000);
-          currentStartTime = null;
-        }
-      }
-    });
-
-    if (userStatus === 'IN' && currentStartTime) {
-      total += Math.floor((currentTime - currentStartTime) / 1000);
-    }
-
-    setUserWorkedSeconds(total);
-  }, [userLogs, userStatus, currentTime]);
-
-  // --- Formatting Helpers ---
-  const formatTime = (date) => {
-    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
-  };
-  const formatTimeWithSeconds = (date) => {
-    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
-  };
-  const formatDate = (date) => {
-    return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-  };
-  const formatDuration = (totalSeconds) => {
-    const h = Math.floor(totalSeconds / 3600);
-    const m = Math.floor((totalSeconds % 3600) / 60);
-    return `${h}h ${m}m`;
-  };
-
-  // --- Handlers (Writing to Firestore) ---
-  const handleUserAction = async (actionType) => {
-    if (!user) return;
-    const now = Date.now();
-
-    let newStatus = userStatus;
-    if (actionType === 'CLOCK_IN' || actionType === 'BREAK_END') newStatus = 'IN';
-    if (actionType === 'CLOCK_OUT') newStatus = 'OUT';
-    if (actionType === 'BREAK_START') newStatus = 'BREAK';
-
-    setUserStatus(newStatus); 
-
-    try {
-      const logsRef = collection(db, 'artifacts', appId, 'users', user.uid, 'logs');
-      await addDoc(logsRef, { type: actionType, timestamp: now });
-
-      const statusRef = doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'currentStatus');
-      await setDoc(statusRef, { status: newStatus, updatedAt: now });
-    } catch (error) {
-      console.error("Error saving action:", error);
-    }
-  };
-
-  const handleAddEmployee = async (empData) => {
-    if (!user) return;
-    try {
-      const teamRef = collection(db, 'artifacts', appId, 'public', 'data', 'employees');
-      await addDoc(teamRef, {
-        ...empData,
-        status: 'OUT',
-        secondsWorked: 0,
-        lastAction: 'Account Created',
-        createdAt: Date.now()
-      });
-    } catch (error) {
-      console.error("Error adding employee:", error);
-    }
-  };
-
-  const handleUpdateEmployee = async (id, empData) => {
-    if (!user) return;
-    try {
-      const empRef = doc(db, 'artifacts', appId, 'public', 'data', 'employees', id);
-      await updateDoc(empRef, empData);
-    } catch (error) {
-      console.error("Error updating employee:", error);
-    }
-  };
-
-  const handleDeleteEmployee = async (id) => {
-    if (!user) return;
-    try {
-      const empRef = doc(db, 'artifacts', appId, 'public', 'data', 'employees', id);
-      await deleteDoc(empRef);
-    } catch (error) {
-      console.error("Error deleting employee:", error);
-    }
-  };
-
-  const handleLogout = () => {
-    setIsUnlocked(false);
-    setSelectedRole(null);
-  };
-
-  // --- Prepare Data ---
-  const sortedUserLogs = [...userLogs].sort((a, b) => b.timestamp - a.timestamp);
-  const lastActionString = sortedUserLogs.length > 0 
-    ? `${sortedUserLogs[0].type.replace('_', ' ')}` 
-    : 'No activity';
-
-  const allEmployees = [
-    { 
-      id: user?.uid || '1', 
-      name: 'John (You)', 
-      role: 'Admin', 
-      status: userStatus, 
-      secondsWorked: userWorkedSeconds,
-      lastAction: lastActionString,
-      isMainUser: true
-    },
-    ...teamEmployees
-  ];
-
-  // --- Renders ---
-  
-  // Mobile Wrapper Container
-  const AppWrapper = ({ children }) => (
-    <div className="w-full h-screen sm:h-[90vh] sm:max-h-[850px] sm:max-w-[400px] sm:mx-auto sm:my-[5vh] bg-slate-50 sm:rounded-[2.5rem] sm:shadow-2xl overflow-hidden relative flex flex-col font-sans border-slate-200 sm:border-[8px]">
-      {children}
-    </div>
-  );
-
-  if (authLoading) {
-    return (
-      <AppWrapper>
-        <div className="flex-1 flex flex-col items-center justify-center text-slate-500 gap-4">
-          <Loader2 size={32} className="animate-spin text-indigo-500" />
-          <p className="font-medium animate-pulse text-sm">Connecting to cloud...</p>
-        </div>
-      </AppWrapper>
-    );
-  }
-
-  // 1. Role Selection Screen (Login)
-  if (!selectedRole) {
-    return (
-      <AppWrapper>
-        <div className="flex flex-col h-full p-6 justify-center">
-          <div className="text-center mb-10 mt-[-10%]">
-            <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-indigo-200">
-              <Clock size={32} className="text-white" />
-            </div>
-            <h1 className="text-3xl font-bold text-slate-900 tracking-tight">TimeTracker</h1>
-            <p className="text-slate-500 mt-1 flex items-center justify-center gap-1.5 text-sm">
-              <Cloud size={14} className="text-indigo-400" /> Cloud Synced
-            </p>
-          </div>
-
-          <div className="space-y-4">
-            <button 
-              onClick={() => setSelectedRole('EMPLOYEE')}
-              className="w-full bg-white p-5 rounded-2xl border border-slate-200 flex items-center gap-4 active:scale-95 transition-transform shadow-sm"
-            >
-              <div className="w-12 h-12 bg-indigo-50 rounded-full flex items-center justify-center shrink-0">
-                <User size={24} className="text-indigo-600" />
-              </div>
-              <div className="text-left flex-1">
-                <h2 className="text-lg font-bold text-slate-900">Employee</h2>
-                <p className="text-xs text-slate-500 line-clamp-1">Track time & breaks</p>
-              </div>
-              <ChevronRight size={20} className="text-slate-300" />
-            </button>
-
-            <button 
-              onClick={() => setSelectedRole('OWNER')}
-              className="w-full bg-slate-900 p-5 rounded-2xl border border-slate-800 flex items-center gap-4 active:scale-95 transition-transform shadow-md"
-            >
-              <div className="w-12 h-12 bg-slate-800 rounded-full flex items-center justify-center shrink-0">
-                <ShieldCheck size={24} className="text-slate-300" />
-              </div>
-              <div className="text-left flex-1">
-                <h2 className="text-lg font-bold text-white">Owner</h2>
-                <p className="text-xs text-slate-400 line-clamp-1">Manage team</p>
-              </div>
-              <ChevronRight size={20} className="text-slate-600" />
-            </button>
-          </div>
-        </div>
-      </AppWrapper>
-    );
-  }
-
-  // 2. PIN Pad Entry Screen
-  if (selectedRole && !isUnlocked) {
-    const expectedPin = selectedRole === 'EMPLOYEE' ? '1234' : '8888';
-    return (
-      <AppWrapper>
-        <PinPadScreen 
-          role={selectedRole} 
-          expectedPin={expectedPin} 
-          onSuccess={() => setIsUnlocked(true)} 
-          onCancel={() => setSelectedRole(null)} 
-        />
-      </AppWrapper>
-    );
-  }
-
-  // 3. Main App Container
-  return (
-    <AppWrapper>
-      {/* Mobile Top Bar */}
-      <nav className={`px-4 py-3 flex items-center justify-between shadow-sm z-50 ${selectedRole === 'OWNER' ? 'bg-slate-900 text-white' : 'bg-white border-b border-slate-100 text-slate-900'}`}>
-        <div className="flex items-center gap-2">
-          {selectedRole === 'OWNER' ? <ShieldCheck size={20} className="text-indigo-400" /> : <Clock size={20} className="text-indigo-600" />}
-          <span className="font-bold text-md tracking-tight">
-            {selectedRole === 'OWNER' ? 'Admin' : 'TimeTracker'}
-          </span>
-        </div>
-        <button
-          onClick={handleLogout}
-          className={`p-2 rounded-full active:bg-slate-200 transition-colors ${selectedRole === 'OWNER' ? 'text-slate-300 hover:bg-slate-800' : 'text-slate-500 bg-slate-50'}`}
-        >
-          <LogOut size={18} />
-        </button>
-      </nav>
-
-      <div className="flex-1 overflow-auto bg-slate-50">
-        {selectedRole === 'EMPLOYEE' ? (
-          <EmployeeView 
-            currentTime={currentTime}
-            status={userStatus}
-            logs={sortedUserLogs}
-            workedSeconds={userWorkedSeconds}
-            handleAction={handleUserAction}
-            formatTimeWithSeconds={formatTimeWithSeconds}
-            formatDate={formatDate}
-            formatDuration={formatDuration}
-          />
-        ) : (
-          <OwnerDashboard 
-            employees={allEmployees}
-            formatDuration={formatDuration}
-            onAddEmployee={handleAddEmployee}
-            onUpdateEmployee={handleUpdateEmployee}
-            onDeleteEmployee={handleDeleteEmployee}
-          />
-        )}
-      </div>
-    </AppWrapper>
-  );
-}
-
-// ==========================================
-// PIN PAD SCREEN COMPONENT (Mobile Optimized)
-// ==========================================
-function PinPadScreen({ role, expectedPin, onSuccess, onCancel }) {
-  const [pin, setPin] = useState('');
-  const [error, setError] = useState(false);
-
-  const handleNumberClick = (num) => {
-    if (pin.length < 4) {
-      const newPin = pin + num;
-      setPin(newPin);
-      setError(false);
-      if (newPin.length === 4) verifyPin(newPin);
-    }
-  };
-
-  const verifyPin = (enteredPin) => {
-    if (enteredPin === expectedPin) {
-      setTimeout(() => onSuccess(), 150); 
-    } else {
-      setError(true);
-      setTimeout(() => setPin(''), 400); 
-    }
-  };
-
-  return (
-    <div className="flex flex-col h-full bg-white relative">
-      <button onClick={onCancel} className="absolute top-4 left-4 p-2 text-slate-400 active:bg-slate-100 rounded-full z-10">
-        <ArrowLeft size={24} />
-      </button>
-
-      <div className="flex-1 flex flex-col items-center justify-center p-6">
-        <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-4 
-          ${role === 'OWNER' ? 'bg-slate-100 text-slate-700' : 'bg-indigo-50 text-indigo-600'}`}>
-          <Lock size={28} />
-        </div>
-        <h2 className="text-2xl font-bold text-slate-900 mb-1">Enter PIN</h2>
-        <span className="font-mono text-xs bg-slate-100 text-slate-500 px-2 py-1 rounded mt-1">Hint: {expectedPin}</span>
-
-        <div className={`flex gap-4 mt-8 ${error ? 'animate-pulse' : ''}`}>
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className={`w-4 h-4 rounded-full transition-colors 
-              ${pin.length > i ? (error ? 'bg-rose-500' : 'bg-slate-800') : 'bg-slate-200'}`} />
-          ))}
-        </div>
-      </div>
-
-      <div className="bg-slate-50 p-6 grid grid-cols-3 gap-y-4 gap-x-6 pb-10">
-        {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => (
-          <button key={num} onClick={() => handleNumberClick(num.toString())}
-            className="h-16 rounded-full flex items-center justify-center text-3xl font-medium text-slate-800 active:bg-slate-200 transition-colors"
-          >{num}</button>
-        ))}
-        <div />
-        <button onClick={() => handleNumberClick('0')}
-          className="h-16 rounded-full flex items-center justify-center text-3xl font-medium text-slate-800 active:bg-slate-200 transition-colors"
-        >0</button>
-        <button onClick={() => { setPin(pin.slice(0, -1)); setError(false); }}
-          className="h-16 rounded-full flex items-center justify-center text-slate-600 active:bg-slate-200 transition-colors"
-        ><Delete size={28} /></button>
-      </div>
-    </div>
-  );
-}
-
-
-// ==========================================
-// EMPLOYEE VIEW (Mobile Optimized)
-// ==========================================
-function EmployeeView({ currentTime, status, logs, workedSeconds, handleAction, formatTimeWithSeconds, formatDate, formatDuration }) {
-  const isOut = status === 'OUT';
-  const isIn = status === 'IN';
-  const isBreak = status === 'BREAK';
-
-  return (
-    <div className="flex flex-col h-full bg-slate-50 pb-6">
-      
-      {/* Mobile Profile Header */}
-      <div className="px-6 py-5 bg-white flex items-center justify-between border-b border-slate-100 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center overflow-hidden">
-            <User size={24} className="text-slate-400" />
-          </div>
-          <div>
-            <h2 className="font-bold text-slate-900 text-lg leading-tight">John Doe</h2>
-            <p className="text-xs text-slate-500">{formatDate(currentTime)}</p>
-          </div>
-        </div>
-        <div className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider
-          ${isIn ? 'bg-green-100 text-green-700' : isBreak ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>
-          {status}
-        </div>
-      </div>
-
-      {/* Main Clock Area */}
-      <div className="flex-1 flex flex-col items-center justify-center py-6 px-4 shrink-0">
-        <div className="w-48 h-48 rounded-full bg-white shadow-xl shadow-indigo-100/50 border-[6px] border-slate-50 flex flex-col items-center justify-center relative mb-6">
-          {isIn && <div className="absolute inset-0 rounded-full border-4 border-green-500 opacity-20 animate-ping" style={{ animationDuration: '3s'}}></div>}
-          <div className="text-4xl font-bold text-slate-800 tracking-tighter font-mono">
-            {formatTimeWithSeconds(currentTime).split(' ')[0]}
-          </div>
-          <div className="text-sm font-bold text-slate-400 mt-1 uppercase">
-            {formatTimeWithSeconds(currentTime).split(' ')[1]}
-          </div>
-        </div>
+    <!-- Mobile App Wrapper -->
+    <div id="app-wrapper" class="w-full h-full sm:h-[90vh] sm:max-h-[850px] sm:max-w-[400px] bg-slate-50 sm:rounded-[2.5rem] sm:shadow-2xl overflow-hidden relative flex flex-col sm:border-[8px] border-slate-300">
         
-        <div className="flex items-center gap-2 text-indigo-600 bg-indigo-50 px-4 py-2 rounded-full">
-          <Activity size={16} />
-          <span className="font-bold text-sm">{formatDuration(workedSeconds)} Active</span>
+        <!-- 1. LOADING VIEW -->
+        <div id="view-loading" class="view-active flex-col items-center justify-center h-full gap-4 text-slate-500 bg-slate-50 z-50 absolute inset-0">
+            <i class="fa-solid fa-circle-notch fa-spin text-4xl text-indigo-500"></i>
+            <p class="font-medium animate-pulse text-sm">Connecting to cloud...</p>
         </div>
-      </div>
 
-      {/* Action Buttons (Sticky at bottom-ish) */}
-      <div className="px-6 space-y-3 shrink-0">
-        {isOut && (
-          <button onClick={() => handleAction('CLOCK_IN')} className="w-full h-14 bg-indigo-600 active:bg-indigo-700 text-white rounded-2xl font-bold text-lg flex items-center justify-center gap-2 shadow-lg shadow-indigo-200 transition-colors">
-            <Play fill="currentColor" size={20} /> Clock In
-          </button>
-        )}
-        
-        {isIn && (
-          <>
-            <button onClick={() => handleAction('CLOCK_OUT')} className="w-full h-14 bg-rose-500 active:bg-rose-600 text-white rounded-2xl font-bold text-lg flex items-center justify-center gap-2 shadow-lg shadow-rose-200 transition-colors">
-              <Square fill="currentColor" size={20} /> Clock Out
-            </button>
-            <button onClick={() => handleAction('BREAK_START')} className="w-full h-12 bg-white border-2 border-slate-200 active:bg-slate-50 text-slate-700 rounded-2xl font-bold flex items-center justify-center gap-2 transition-colors">
-              <Coffee size={20} /> Take Break
-            </button>
-          </>
-        )}
-
-        {isBreak && (
-          <button onClick={() => handleAction('BREAK_END')} className="w-full h-14 bg-amber-500 active:bg-amber-600 text-white rounded-2xl font-bold text-lg flex items-center justify-center gap-2 shadow-lg shadow-amber-200 transition-colors">
-            <Play fill="currentColor" size={20} /> Resume Work
-          </button>
-        )}
-      </div>
-
-      {/* Recent Activity Mini List */}
-      {logs.length > 0 && (
-         <div className="px-6 mt-8 shrink-0">
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Today's Punches</p>
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden divide-y divide-slate-50">
-            {logs.slice(0, 3).map(log => (
-              <div key={log.id} className="p-3 flex items-center justify-between">
-                <span className="text-sm font-semibold text-slate-700 capitalize">{log.type.replace('_', ' ').toLowerCase()}</span>
-                <span className="text-xs font-mono text-slate-500">
-                  {log.timestamp.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                </span>
-              </div>
-            ))}
-            {logs.length > 3 && <div className="p-2 text-center text-xs text-slate-400 font-medium bg-slate-50">View {logs.length - 3} more...</div>}
-          </div>
-         </div>
-      )}
-    </div>
-  );
-}
-
-// ==========================================
-// OWNER DASHBOARD (Mobile Optimized)
-// ==========================================
-function OwnerDashboard({ employees, formatDuration, onAddEmployee, onUpdateEmployee, onDeleteEmployee }) {
-  const [activeTab, setActiveTab] = useState('LIVE'); // 'LIVE' | 'TEAM'
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingEmployee, setEditingEmployee] = useState(null);
-  const [formData, setFormData] = useState({ name: '', role: '', pin: '' });
-
-  const activeCount = employees.filter(e => e.status === 'IN').length;
-
-  const openModal = (emp = null) => {
-    setEditingEmployee(emp);
-    setFormData(emp ? { name: emp.name, role: emp.role, pin: emp.pin || '' } : { name: '', role: '', pin: '' });
-    setIsModalOpen(true);
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!formData.name.trim()) return;
-    editingEmployee ? onUpdateEmployee(editingEmployee.id, formData) : onAddEmployee(formData);
-    setIsModalOpen(false);
-  };
-
-  return (
-    <div className="flex flex-col h-full bg-slate-50 relative pb-20">
-      
-      {/* Sticky Tab Bar */}
-      <div className="bg-white px-4 py-3 border-b border-slate-200 sticky top-0 z-10">
-        <div className="flex bg-slate-100 p-1 rounded-xl">
-          <button onClick={() => setActiveTab('LIVE')} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${activeTab === 'LIVE' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>Live</button>
-          <button onClick={() => setActiveTab('TEAM')} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${activeTab === 'TEAM' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>Directory</button>
-        </div>
-      </div>
-
-      <div className="p-4 flex-1 overflow-y-auto">
-        
-        {/* --- LIVE TAB --- */}
-        {activeTab === 'LIVE' && (
-          <div className="space-y-4 animate-in fade-in duration-300">
-            {/* Minimal KPI */}
-            <div className="bg-slate-900 rounded-2xl p-5 text-white flex justify-between items-center shadow-lg">
-              <div>
-                <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Working Now</p>
-                <div className="text-3xl font-bold flex items-baseline gap-2">
-                  {activeCount} <span className="text-lg text-slate-500">/ {employees.length}</span>
+        <!-- 2. ROLE SELECTION VIEW -->
+        <div id="view-roles" class="view-hidden flex-col h-full p-6 justify-center bg-slate-50 absolute inset-0 z-40">
+            <div class="text-center mb-10 -mt-10">
+                <div class="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-indigo-200">
+                    <i class="fa-solid fa-clock text-3xl text-white"></i>
                 </div>
-              </div>
-              <div className="w-12 h-12 rounded-full bg-green-500/20 flex items-center justify-center">
-                <div className="w-4 h-4 rounded-full bg-green-500 animate-pulse" />
-              </div>
+                <h1 class="text-3xl font-bold text-slate-900 tracking-tight">TimeTracker</h1>
+                <p class="text-slate-500 mt-1 flex items-center justify-center gap-1.5 text-sm">
+                    <i class="fa-solid fa-cloud text-indigo-400"></i> Cloud Synced
+                </p>
             </div>
 
-            <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider px-2 mt-6">Current Status</h3>
-            <div className="space-y-3">
-              {employees.map((emp) => (
-                <div key={emp.id} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-3">
-                  <div className={`w-12 h-12 rounded-full flex flex-col items-center justify-center shrink-0 border-2
-                    ${emp.status === 'IN' ? 'border-green-500 text-green-700 bg-green-50' : 
-                      emp.status === 'BREAK' ? 'border-amber-400 text-amber-700 bg-amber-50' : 
-                      'border-slate-200 text-slate-500 bg-slate-50'}`}>
-                    <span className="font-bold text-lg leading-none">{emp.name.charAt(0)}</span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold text-slate-900 truncate flex items-center gap-1.5">
-                      {emp.name} {emp.isMainUser && <Lock size={12} className="text-slate-400" />}
-                    </p>
-                    <p className="text-xs text-slate-500 truncate">{emp.lastAction}</p>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <p className={`text-xs font-bold uppercase ${emp.status === 'IN' ? 'text-green-600' : emp.status === 'BREAK' ? 'text-amber-500' : 'text-slate-400'}`}>
-                      {emp.status}
-                    </p>
-                    <p className="text-sm font-mono font-medium text-slate-700">{formatDuration(emp.secondsWorked)}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* --- DIRECTORY TAB --- */}
-        {activeTab === 'TEAM' && (
-          <div className="space-y-3 animate-in fade-in duration-300">
-             {employees.map((emp) => (
-                <div key={emp.id} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-600">
-                      {emp.name.charAt(0)}
+            <div class="space-y-4">
+                <button onclick="selectRole('EMPLOYEE')" class="w-full bg-white p-5 rounded-2xl border border-slate-200 flex items-center gap-4 active:scale-95 transition-transform shadow-sm text-left">
+                    <div class="w-12 h-12 bg-indigo-50 rounded-full flex items-center justify-center shrink-0">
+                        <i class="fa-solid fa-user text-xl text-indigo-600"></i>
                     </div>
-                    <div>
-                      <p className="font-bold text-slate-900 leading-tight">{emp.name}</p>
-                      <p className="text-xs text-slate-500">{emp.role}</p>
+                    <div class="flex-1">
+                        <h2 class="text-lg font-bold text-slate-900">Employee</h2>
+                        <p class="text-xs text-slate-500">Track time & breaks</p>
                     </div>
-                  </div>
-                  
-                  {emp.isMainUser ? (
-                    <span className="text-[10px] uppercase font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded">Admin</span>
-                  ) : (
-                    <div className="flex gap-1">
-                       <button onClick={() => openModal(emp)} className="w-10 h-10 rounded-full flex items-center justify-center text-slate-400 active:bg-slate-100">
-                         <Edit2 size={18} />
-                       </button>
-                    </div>
-                  )}
-                </div>
-             ))}
-          </div>
-        )}
-      </div>
-
-      {/* Floating Action Button (Only in Team Tab) */}
-      {activeTab === 'TEAM' && (
-        <button 
-          onClick={() => openModal()}
-          className="absolute bottom-6 right-6 w-14 h-14 bg-indigo-600 text-white rounded-full flex items-center justify-center shadow-lg shadow-indigo-300 active:scale-95 transition-transform z-20"
-        >
-          <Plus size={24} />
-        </button>
-      )}
-
-      {/* Mobile Add/Edit Modal (Bottom Sheet style) */}
-      {isModalOpen && (
-        <div className="absolute inset-0 z-50 flex flex-col justify-end bg-slate-900/40 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white w-full rounded-t-3xl pt-6 pb-8 px-6 shadow-2xl animate-in slide-in-from-bottom-full duration-300">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-slate-900">{editingEmployee ? 'Edit Info' : 'New Member'}</h3>
-              <button onClick={() => setIsModalOpen(false)} className="bg-slate-100 p-2 rounded-full text-slate-500"><X size={20}/></button>
-            </div>
-            
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <input type="text" required placeholder="Full Name" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})}
-                className="w-full bg-slate-50 px-4 py-4 rounded-xl border border-slate-200 outline-none focus:border-indigo-500 focus:bg-white transition-colors text-slate-900" />
-              <input type="text" required placeholder="Role (e.g. Designer)" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})}
-                className="w-full bg-slate-50 px-4 py-4 rounded-xl border border-slate-200 outline-none focus:border-indigo-500 focus:bg-white transition-colors text-slate-900" />
-              
-              <div className="pt-2">
-                 <input type="text" maxLength="4" pattern="\d*" placeholder="4-Digit PIN (Optional)" value={formData.pin} onChange={e => setFormData({...formData, pin: e.target.value.replace(/\D/g, '')})}
-                  className="w-full bg-slate-50 px-4 py-4 rounded-xl border border-slate-200 outline-none focus:border-indigo-500 focus:bg-white transition-colors text-slate-900 font-mono tracking-widest" />
-              </div>
-
-              <div className="pt-4 flex gap-3">
-                {editingEmployee && (
-                   <button type="button" onClick={() => { if(window.confirm('Remove this employee?')) { onDeleteEmployee(editingEmployee.id); setIsModalOpen(false); } }} 
-                     className="w-14 h-14 bg-rose-50 text-rose-500 rounded-xl flex items-center justify-center shrink-0">
-                     <Trash2 size={20} />
-                   </button>
-                )}
-                <button type="submit" className="flex-1 h-14 bg-indigo-600 text-white font-bold rounded-xl active:bg-indigo-700 transition-colors">
-                  {editingEmployee ? 'Save' : 'Add Member'}
+                    <i class="fa-solid fa-chevron-right text-slate-300"></i>
                 </button>
-              </div>
-            </form>
-          </div>
+
+                <button onclick="selectRole('OWNER')" class="w-full bg-slate-900 p-5 rounded-2xl border border-slate-800 flex items-center gap-4 active:scale-95 transition-transform shadow-md text-left">
+                    <div class="w-12 h-12 bg-slate-800 rounded-full flex items-center justify-center shrink-0">
+                        <i class="fa-solid fa-shield-halved text-xl text-slate-300"></i>
+                    </div>
+                    <div class="flex-1">
+                        <h2 class="text-lg font-bold text-white">Owner</h2>
+                        <p class="text-xs text-slate-400">Manage team</p>
+                    </div>
+                    <i class="fa-solid fa-chevron-right text-slate-600"></i>
+                </button>
+            </div>
         </div>
-      )}
+
+        <!-- 3. PIN PAD VIEW -->
+        <div id="view-pin" class="view-hidden flex-col h-full bg-white absolute inset-0 z-40">
+            <button onclick="cancelPin()" class="absolute top-4 left-4 p-3 text-slate-400 active:bg-slate-100 rounded-full z-10">
+                <i class="fa-solid fa-arrow-left text-xl"></i>
+            </button>
+
+            <div class="flex-1 flex flex-col items-center justify-center p-6 mt-8">
+                <div id="pin-icon-container" class="w-14 h-14 rounded-full flex items-center justify-center mb-4">
+                    <i class="fa-solid fa-lock text-2xl"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-slate-900 mb-1">Enter PIN</h2>
+                <span id="pin-hint" class="font-mono text-xs bg-slate-100 text-slate-500 px-2 py-1 rounded mt-1">Hint: 1234</span>
+
+                <div id="pin-dots" class="flex gap-4 mt-8">
+                    <div class="w-4 h-4 rounded-full bg-slate-200 transition-colors"></div>
+                    <div class="w-4 h-4 rounded-full bg-slate-200 transition-colors"></div>
+                    <div class="w-4 h-4 rounded-full bg-slate-200 transition-colors"></div>
+                    <div class="w-4 h-4 rounded-full bg-slate-200 transition-colors"></div>
+                </div>
+                <p id="pin-error" class="text-rose-500 text-sm font-bold mt-4 opacity-0 transition-opacity">Incorrect PIN</p>
+            </div>
+
+            <div class="bg-slate-50 p-6 grid grid-cols-3 gap-y-4 gap-x-6 pb-10 rounded-t-3xl border-t border-slate-100">
+                <!-- Numpad buttons generated in JS -->
+            </div>
+        </div>
+
+        <!-- 4. MAIN APP VIEW (Container for Employee/Owner) -->
+        <div id="view-main" class="view-hidden flex-col h-full absolute inset-0 z-30 bg-slate-50">
+            
+            <!-- Top Nav Bar -->
+            <nav id="top-nav" class="px-4 py-3 flex items-center justify-between shadow-sm z-20 shrink-0">
+                <div class="flex items-center gap-2" id="nav-title-area">
+                    <!-- Icon and Title set via JS -->
+                </div>
+                <button onclick="logout()" class="p-2 rounded-full active:bg-slate-200 transition-colors" id="nav-logout-btn">
+                    <i class="fa-solid fa-right-from-bracket"></i>
+                </button>
+            </nav>
+
+            <!-- Scrollable Content Area -->
+            <div class="flex-1 overflow-y-auto relative" id="main-content-scroll">
+                
+                <!-- A. EMPLOYEE INTERFACE -->
+                <div id="interface-employee" class="tab-hidden flex-col h-full fade-in pb-6">
+                    <!-- Mobile Profile Header -->
+                    <div class="px-6 py-5 bg-white flex items-center justify-between border-b border-slate-100 shadow-sm shrink-0">
+                        <div class="flex items-center gap-3">
+                            <div class="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center overflow-hidden">
+                                <i class="fa-solid fa-user text-slate-400 text-xl"></i>
+                            </div>
+                            <div>
+                                <h2 class="font-bold text-slate-900 text-lg leading-tight">John Doe</h2>
+                                <p class="text-xs text-slate-500" id="emp-current-date">--</p>
+                            </div>
+                        </div>
+                        <div id="emp-status-badge" class="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-slate-100 text-slate-600">OUT</div>
+                    </div>
+
+                    <!-- Main Clock Area -->
+                    <div class="flex-1 flex flex-col items-center justify-center py-6 px-4 shrink-0 min-h-[250px]">
+                        <div class="w-48 h-48 rounded-full bg-white shadow-xl shadow-indigo-100/50 border-[6px] border-slate-50 flex flex-col items-center justify-center relative mb-6">
+                            <div id="emp-clock-ring" class="absolute inset-0 rounded-full border-4 border-green-500 opacity-20 animate-ping hidden" style="animation-duration: 3s;"></div>
+                            <div id="emp-clock-time" class="text-4xl font-bold text-slate-800 tracking-tighter font-mono">00:00:00</div>
+                            <div id="emp-clock-ampm" class="text-sm font-bold text-slate-400 mt-1 uppercase">AM</div>
+                        </div>
+                        
+                        <div class="flex items-center gap-2 text-indigo-600 bg-indigo-50 px-4 py-2 rounded-full">
+                            <i class="fa-solid fa-chart-line"></i>
+                            <span class="font-bold text-sm" id="emp-worked-hours">0h 0m Active</span>
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div id="emp-action-buttons" class="px-6 space-y-3 shrink-0">
+                        <!-- Buttons rendered via JS based on state -->
+                    </div>
+
+                    <!-- Recent Activity Mini List -->
+                    <div class="px-6 mt-8 shrink-0 pb-4">
+                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex justify-between">
+                            <span>Today's Punches</span>
+                            <span id="emp-log-count" class="bg-slate-200 text-slate-600 px-2 rounded-md">0</span>
+                        </p>
+                        <div id="emp-logs-container" class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden divide-y divide-slate-50">
+                            <!-- Logs injected here -->
+                            <div class="p-4 text-center text-sm text-slate-400">No activity yet.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- B. OWNER INTERFACE -->
+                <div id="interface-owner" class="tab-hidden flex-col h-full fade-in bg-slate-50 pb-20">
+                    
+                    <!-- Sticky Tab Bar -->
+                    <div class="bg-white px-4 py-3 border-b border-slate-200 sticky top-0 z-10">
+                        <div class="flex bg-slate-100 p-1 rounded-xl">
+                            <button onclick="switchOwnerTab('LIVE')" id="tab-btn-live" class="flex-1 py-2 text-sm font-bold rounded-lg transition-colors bg-white text-slate-900 shadow-sm">Live</button>
+                            <button onclick="switchOwnerTab('TEAM')" id="tab-btn-team" class="flex-1 py-2 text-sm font-bold rounded-lg transition-colors text-slate-500">Directory</button>
+                        </div>
+                    </div>
+
+                    <div class="p-4 flex-1">
+                        <!-- LIVE TAB -->
+                        <div id="owner-tab-live" class="tab-active space-y-4 fade-in">
+                            <div class="bg-slate-900 rounded-2xl p-5 text-white flex justify-between items-center shadow-lg">
+                                <div>
+                                    <p class="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Working Now</p>
+                                    <div class="text-3xl font-bold flex items-baseline gap-2">
+                                        <span id="own-active-count">0</span> <span class="text-lg text-slate-500" id="own-total-count">/ 0</span>
+                                    </div>
+                                </div>
+                                <div class="w-12 h-12 rounded-full bg-green-500/20 flex items-center justify-center">
+                                    <div class="w-4 h-4 rounded-full bg-green-500 animate-pulse"></div>
+                                </div>
+                            </div>
+
+                            <h3 class="text-sm font-bold text-slate-500 uppercase tracking-wider px-2 mt-6">Current Status</h3>
+                            <div id="own-live-list" class="space-y-3">
+                                <!-- Live items injected here -->
+                            </div>
+                        </div>
+
+                        <!-- DIRECTORY TAB -->
+                        <div id="owner-tab-team" class="tab-hidden space-y-3 fade-in">
+                            <div id="own-team-list" class="space-y-3 pb-6">
+                                <!-- Team items injected here -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Floating Action Button (Team Tab Only) -->
+                    <button onclick="openModal()" id="own-fab-add" class="hidden absolute bottom-6 right-6 w-14 h-14 bg-indigo-600 text-white rounded-full flex items-center justify-center shadow-lg shadow-indigo-300 active:scale-95 transition-transform z-20">
+                        <i class="fa-solid fa-plus text-xl"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 5. ADD/EDIT EMPLOYEE MODAL (Bottom Sheet) -->
+        <div id="modal-employee" class="view-hidden absolute inset-0 z-50 flex-col justify-end bg-slate-900/40 backdrop-blur-sm fade-in">
+            <div class="bg-white w-full rounded-t-3xl pt-6 pb-8 px-6 shadow-2xl transition-transform transform translate-y-0">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 id="modal-title" class="text-xl font-bold text-slate-900">New Member</h3>
+                    <button onclick="closeModal()" class="bg-slate-100 w-8 h-8 rounded-full flex items-center justify-center text-slate-500">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+                
+                <form id="employee-form" class="space-y-4">
+                    <input type="hidden" id="form-emp-id">
+                    <input type="text" id="form-emp-name" required placeholder="Full Name" class="w-full bg-slate-50 px-4 py-4 rounded-xl border border-slate-200 outline-none focus:border-indigo-500 focus:bg-white transition-colors text-slate-900">
+                    <input type="text" id="form-emp-role" required placeholder="Role (e.g. Designer)" class="w-full bg-slate-50 px-4 py-4 rounded-xl border border-slate-200 outline-none focus:border-indigo-500 focus:bg-white transition-colors text-slate-900">
+                    
+                    <div class="pt-2">
+                        <input type="text" id="form-emp-pin" maxlength="4" pattern="\d*" placeholder="4-Digit PIN (Optional)" class="w-full bg-slate-50 px-4 py-4 rounded-xl border border-slate-200 outline-none focus:border-indigo-500 focus:bg-white transition-colors text-slate-900 font-mono tracking-widest">
+                    </div>
+
+                    <div class="pt-4 flex gap-3">
+                        <button type="button" id="form-btn-delete" onclick="deleteCurrentEmployee()" class="hidden w-14 h-14 bg-rose-50 text-rose-500 rounded-xl flex items-center justify-center shrink-0">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                        <button type="submit" id="form-btn-submit" class="flex-1 h-14 bg-indigo-600 text-white font-bold rounded-xl active:bg-indigo-700 transition-colors">
+                            Add Member
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
 
     </div>
-  );
-}
+
+    <!-- FIREBASE & APP LOGIC -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- App State ---
+        const state = {
+            user: null,
+            selectedRole: null, // 'EMPLOYEE' | 'OWNER'
+            isUnlocked: false,
+            pinBuffer: '',
+            
+            // Private State
+            userStatus: 'OUT',
+            userLogs: [],
+            userWorkedSeconds: 0,
+            
+            // Public Team State
+            teamEmployees: [],
+            
+            // Owner UI State
+            ownerActiveTab: 'LIVE',
+            editingEmployeeId: null,
+
+            // Mock fallback
+            mockTeam: [
+                { id: 'mock1', name: 'Sarah Smith', role: 'UI/UX Designer', status: 'IN', secondsWorked: 14400, lastAction: 'CLOCK_IN', pin: '1111' },
+                { id: 'mock2', name: 'Mike Johnson', role: 'Product Manager', status: 'BREAK', secondsWorked: 18000, lastAction: 'BREAK_START', pin: '2222' }
+            ]
+        };
+
+        // --- Setup Firebase ---
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // --- View Management ---
+        const views = {
+            loading: document.getElementById('view-loading'),
+            roles: document.getElementById('view-roles'),
+            pin: document.getElementById('view-pin'),
+            main: document.getElementById('view-main'),
+            modal: document.getElementById('modal-employee')
+        };
+
+        function showView(viewName) {
+            Object.values(views).forEach(v => {
+                v.classList.remove('view-active');
+                v.classList.add('view-hidden');
+            });
+            if(views[viewName]) {
+                views[viewName].classList.remove('view-hidden');
+                views[viewName].classList.add('view-active');
+            }
+        }
+
+        // --- Authentication ---
+        async function initAuth() {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (error) {
+                console.error('Auth Error:', error);
+                alert("Authentication failed. Check console.");
+            }
+        }
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                state.user = user;
+                setupFirestoreListeners();
+                showView('roles');
+                startGlobalTimer();
+            }
+        });
+
+        // --- Firestore Listeners ---
+        function setupFirestoreListeners() {
+            if (!state.user) return;
+            const uid = state.user.uid;
+
+            // 1. Private Logs
+            onSnapshot(collection(db, 'artifacts', appId, 'users', uid, 'logs'), (snapshot) => {
+                state.userLogs = snapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
+                calculateWorkedHours();
+                updateUI();
+            }, (error) => console.error("Error fetching logs", error));
+
+            // 2. Private Status
+            onSnapshot(doc(db, 'artifacts', appId, 'users', uid, 'settings', 'currentStatus'), (docSnap) => {
+                if (docSnap.exists()) {
+                    state.userStatus = docSnap.data().status;
+                } else {
+                    state.userStatus = 'OUT';
+                }
+                calculateWorkedHours();
+                updateUI();
+            }, (error) => console.error("Error fetching status", error));
+
+            // 3. Public Team
+            onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'employees'), (snapshot) => {
+                state.teamEmployees = snapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
+                updateUI();
+            }, (error) => console.error("Error fetching team", error));
+        }
+
+        // --- Logic & Calculations ---
+        function calculateWorkedHours() {
+            let total = 0;
+            let currentStartTime = null;
+            const sortedLogs = [...state.userLogs].sort((a, b) => a.timestamp - b.timestamp);
+
+            sortedLogs.forEach((log) => {
+                if (log.type === 'CLOCK_IN' || log.type === 'BREAK_END') {
+                    currentStartTime = log.timestamp;
+                } else if (log.type === 'CLOCK_OUT' || log.type === 'BREAK_START') {
+                    if (currentStartTime) {
+                        total += Math.floor((log.timestamp - currentStartTime) / 1000);
+                        currentStartTime = null;
+                    }
+                }
+            });
+
+            if (state.userStatus === 'IN' && currentStartTime) {
+                total += Math.floor((Date.now() - currentStartTime) / 1000);
+            }
+
+            state.userWorkedSeconds = total;
+            
+            // Update UI elements directly to avoid full re-renders every second
+            const empHoursEl = document.getElementById('emp-worked-hours');
+            if (empHoursEl) empHoursEl.innerText = formatDuration(state.userWorkedSeconds) + ' Active';
+        }
+
+        let globalTimer;
+        function startGlobalTimer() {
+            if (globalTimer) clearInterval(globalTimer);
+            globalTimer = setInterval(() => {
+                calculateWorkedHours();
+                
+                // Update specific clock elements
+                const now = new Date();
+                const clockTime = document.getElementById('emp-clock-time');
+                const clockAmPm = document.getElementById('emp-clock-ampm');
+                const clockDate = document.getElementById('emp-current-date');
+                
+                if (clockTime && clockAmPm) {
+                    const timeString = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+                    const parts = timeString.split(' ');
+                    clockTime.innerText = parts[0];
+                    clockAmPm.innerText = parts[1];
+                }
+                if (clockDate) {
+                    clockDate.innerText = now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                }
+
+                // If owner live tab is active, we might want to update it periodically, 
+                // but for simplicity, we let firestore updates drive major redraws.
+            }, 1000);
+        }
+
+        // --- Formatting Helpers ---
+        function formatDuration(totalSeconds) {
+            const h = Math.floor(totalSeconds / 3600);
+            const m = Math.floor((totalSeconds % 3600) / 60);
+            return `${h}h ${m}m`;
+        }
+        function formatTimeShort(timestamp) {
+            return new Date(timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+        }
+        function friendlyActionName(type) {
+            if(!type) return 'No activity';
+            const map = {
+                'CLOCK_IN': 'Clocked In', 'CLOCK_OUT': 'Clocked Out',
+                'BREAK_START': 'Started Break', 'BREAK_END': 'Ended Break'
+            };
+            return map[type] || type.replace('_', ' ');
+        }
+
+        // --- Global Functions (Attached to window for inline HTML onclick) ---
+        
+        window.selectRole = function(role) {
+            state.selectedRole = role;
+            state.pinBuffer = '';
+            
+            // Update PIN UI
+            const iconContainer = document.getElementById('pin-icon-container');
+            iconContainer.className = `w-14 h-14 rounded-full flex items-center justify-center mb-4 ${role === 'OWNER' ? 'bg-slate-100 text-slate-700' : 'bg-indigo-50 text-indigo-600'}`;
+            document.getElementById('pin-hint').innerText = `Hint: ${role === 'EMPLOYEE' ? '1234' : '8888'}`;
+            
+            renderNumpad();
+            updatePinDots();
+            showView('pin');
+        };
+
+        window.cancelPin = function() {
+            state.selectedRole = null;
+            state.pinBuffer = '';
+            showView('roles');
+        };
+
+        window.handleNumClick = function(num) {
+            if (state.pinBuffer.length < 4) {
+                state.pinBuffer += num;
+                document.getElementById('pin-error').style.opacity = '0';
+                updatePinDots();
+                if (state.pinBuffer.length === 4) verifyPin();
+            }
+        };
+
+        window.handlePinDelete = function() {
+            state.pinBuffer = state.pinBuffer.slice(0, -1);
+            document.getElementById('pin-error').style.opacity = '0';
+            updatePinDots();
+        };
+
+        function updatePinDots() {
+            const dots = document.getElementById('pin-dots').children;
+            for (let i = 0; i < 4; i++) {
+                dots[i].className = `w-4 h-4 rounded-full transition-colors ${state.pinBuffer.length > i ? 'bg-slate-800' : 'bg-slate-200'}`;
+            }
+        }
+
+        function verifyPin() {
+            const expected = state.selectedRole === 'EMPLOYEE' ? '1234' : '8888';
+            if (state.pinBuffer === expected) {
+                state.isUnlocked = true;
+                setTimeout(() => {
+                    initMainView();
+                    showView('main');
+                }, 150);
+            } else {
+                const dots = document.getElementById('pin-dots').children;
+                for (let i = 0; i < 4; i++) { dots[i].classList.replace('bg-slate-800', 'bg-rose-500'); }
+                document.getElementById('pin-error').style.opacity = '1';
+                setTimeout(() => {
+                    state.pinBuffer = '';
+                    updatePinDots();
+                }, 500);
+            }
+        }
+
+        window.logout = function() {
+            state.selectedRole = null;
+            state.isUnlocked = false;
+            showView('roles');
+        };
+
+        // --- Employee Actions ---
+        window.handleAction = async function(actionType) {
+            if (!state.user) return;
+            const now = Date.now();
+            let newStatus = state.userStatus;
+            if (actionType === 'CLOCK_IN' || actionType === 'BREAK_END') newStatus = 'IN';
+            if (actionType === 'CLOCK_OUT') newStatus = 'OUT';
+            if (actionType === 'BREAK_START') newStatus = 'BREAK';
+
+            // Optimistic Update
+            state.userStatus = newStatus;
+            updateUI(); 
+
+            try {
+                await addDoc(collection(db, 'artifacts', appId, 'users', state.user.uid, 'logs'), { type: actionType, timestamp: now });
+                await setDoc(doc(db, 'artifacts', appId, 'users', state.user.uid, 'settings', 'currentStatus'), { status: newStatus, updatedAt: now });
+            } catch (err) {
+                console.error("Action error", err);
+            }
+        };
+
+        // --- Owner Actions ---
+        window.switchOwnerTab = function(tab) {
+            state.ownerActiveTab = tab;
+            
+            const btnLive = document.getElementById('tab-btn-live');
+            const btnTeam = document.getElementById('tab-btn-team');
+            const tabLive = document.getElementById('owner-tab-live');
+            const tabTeam = document.getElementById('owner-tab-team');
+            const fab = document.getElementById('own-fab-add');
+
+            if (tab === 'LIVE') {
+                btnLive.className = "flex-1 py-2 text-sm font-bold rounded-lg transition-colors bg-white text-slate-900 shadow-sm";
+                btnTeam.className = "flex-1 py-2 text-sm font-bold rounded-lg transition-colors text-slate-500 hover:text-slate-700";
+                tabLive.classList.replace('tab-hidden', 'tab-active');
+                tabTeam.classList.replace('tab-active', 'tab-hidden');
+                fab.classList.add('hidden');
+            } else {
+                btnTeam.className = "flex-1 py-2 text-sm font-bold rounded-lg transition-colors bg-white text-slate-900 shadow-sm";
+                btnLive.className = "flex-1 py-2 text-sm font-bold rounded-lg transition-colors text-slate-500 hover:text-slate-700";
+                tabTeam.classList.replace('tab-hidden', 'tab-active');
+                tabLive.classList.replace('tab-active', 'tab-hidden');
+                fab.classList.remove('hidden');
+            }
+            updateUI();
+        };
+
+        window.openModal = function(empStr = null) {
+            const emp = empStr ? JSON.parse(decodeURIComponent(empStr)) : null;
+            state.editingEmployeeId = emp ? emp.id : null;
+            
+            document.getElementById('modal-title').innerText = emp ? 'Edit Info' : 'New Member';
+            document.getElementById('form-emp-id').value = emp ? emp.id : '';
+            document.getElementById('form-emp-name').value = emp ? emp.name : '';
+            document.getElementById('form-emp-role').value = emp ? emp.role : '';
+            document.getElementById('form-emp-pin').value = emp ? (emp.pin || '') : '';
+            
+            document.getElementById('form-btn-submit').innerText = emp ? 'Save Changes' : 'Add Member';
+            
+            const delBtn = document.getElementById('form-btn-delete');
+            if (emp) delBtn.classList.remove('hidden');
+            else delBtn.classList.add('hidden');
+
+            showView('modal');
+        };
+
+        window.closeModal = function() {
+            showView('main');
+        };
+
+        document.getElementById('employee-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!state.user) return;
+            
+            const id = document.getElementById('form-emp-id').value;
+            const data = {
+                name: document.getElementById('form-emp-name').value,
+                role: document.getElementById('form-emp-role').value,
+                pin: document.getElementById('form-emp-pin').value
+            };
+
+            closeModal();
+
+            try {
+                if (id) {
+                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'employees', id), data);
+                } else {
+                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'employees'), {
+                        ...data, status: 'OUT', secondsWorked: 0, lastAction: 'Account Created', createdAt: Date.now()
+                    });
+                }
+            } catch (err) { console.error("Error saving employee", err); }
+        });
+
+        window.deleteCurrentEmployee = async function() {
+            if (!state.editingEmployeeId || !state.user) return;
+            if (confirm("Are you sure you want to remove this employee?")) {
+                const id = state.editingEmployeeId;
+                closeModal();
+                try {
+                    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'employees', id));
+                } catch (err) { console.error("Error deleting", err); }
+            }
+        };
+
+        // --- Render Functions ---
+        
+        function renderNumpad() {
+            const pad = document.querySelector('#view-pin .bg-slate-50.grid');
+            let html = '';
+            for(let i=1; i<=9; i++) {
+                html += `<button onclick="handleNumClick('${i}')" class="h-16 rounded-full flex items-center justify-center text-3xl font-medium text-slate-800 active:bg-slate-200 transition-colors">${i}</button>`;
+            }
+            html += `<div></div>`;
+            html += `<button onclick="handleNumClick('0')" class="h-16 rounded-full flex items-center justify-center text-3xl font-medium text-slate-800 active:bg-slate-200 transition-colors">0</button>`;
+            html += `<button onclick="handlePinDelete()" class="h-16 rounded-full flex items-center justify-center text-slate-600 active:bg-slate-200 transition-colors"><i class="fa-solid fa-delete-left text-2xl"></i></button>`;
+            pad.innerHTML = html;
+        }
+
+        function initMainView() {
+            // Setup Nav
+            const navTitle = document.getElementById('nav-title-area');
+            const navBg = document.getElementById('top-nav');
+            const navBtn = document.getElementById('nav-logout-btn');
+
+            if (state.selectedRole === 'OWNER') {
+                navBg.className = "px-4 py-3 flex items-center justify-between shadow-sm z-20 shrink-0 bg-slate-900 text-white";
+                navBtn.className = "p-2 rounded-full active:bg-slate-800 transition-colors text-slate-300";
+                navTitle.innerHTML = `<i class="fa-solid fa-shield-halved text-indigo-400 text-lg"></i> <span class="font-bold text-md tracking-tight">Admin Dashboard</span>`;
+                
+                document.getElementById('interface-employee').classList.replace('tab-active', 'tab-hidden');
+                document.getElementById('interface-owner').classList.replace('tab-hidden', 'tab-active');
+            } else {
+                navBg.className = "px-4 py-3 flex items-center justify-between shadow-sm z-20 shrink-0 bg-white border-b border-slate-100 text-slate-900";
+                navBtn.className = "p-2 rounded-full active:bg-slate-200 transition-colors text-slate-500 bg-slate-50";
+                navTitle.innerHTML = `<i class="fa-solid fa-clock text-indigo-600 text-lg"></i> <span class="font-bold text-md tracking-tight">TimeTracker</span>`;
+                
+                document.getElementById('interface-owner').classList.replace('tab-active', 'tab-hidden');
+                document.getElementById('interface-employee').classList.replace('tab-hidden', 'tab-active');
+            }
+            updateUI();
+        }
+
+        function updateUI() {
+            if (!state.isUnlocked) return;
+            if (state.selectedRole === 'EMPLOYEE') renderEmployeeUI();
+            if (state.selectedRole === 'OWNER') renderOwnerUI();
+        }
+
+        function renderEmployeeUI() {
+            const statusBadge = document.getElementById('emp-status-badge');
+            const clockRing = document.getElementById('emp-clock-ring');
+            const actionBtns = document.getElementById('emp-action-buttons');
+            const logsContainer = document.getElementById('emp-logs-container');
+            const logCount = document.getElementById('emp-log-count');
+
+            const isOut = state.userStatus === 'OUT';
+            const isIn = state.userStatus === 'IN';
+            const isBreak = state.userStatus === 'BREAK';
+
+            // Badge & Ring
+            statusBadge.innerText = state.userStatus;
+            if (isIn) {
+                statusBadge.className = "px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-green-100 text-green-700";
+                clockRing.classList.remove('hidden');
+            } else if (isBreak) {
+                statusBadge.className = "px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-amber-100 text-amber-700";
+                clockRing.classList.add('hidden');
+            } else {
+                statusBadge.className = "px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-slate-100 text-slate-600";
+                clockRing.classList.add('hidden');
+            }
+
+            // Action Buttons
+            let btnsHtml = '';
+            if (isOut) {
+                btnsHtml = `<button onclick="handleAction('CLOCK_IN')" class="w-full h-14 bg-indigo-600 active:bg-indigo-700 text-white rounded-2xl font-bold text-lg flex items-center justify-center gap-2 shadow-lg shadow-indigo-200 transition-colors"><i class="fa-solid fa-play"></i> Clock In</button>`;
+            } else if (isIn) {
+                btnsHtml = `
+                    <button onclick="handleAction('CLOCK_OUT')" class="w-full h-14 bg-rose-500 active:bg-rose-600 text-white rounded-2xl font-bold text-lg flex items-center justify-center gap-2 shadow-lg shadow-rose-200 transition-colors"><i class="fa-solid fa-square"></i> Clock Out</button>
+                    <button onclick="handleAction('BREAK_START')" class="w-full h-12 bg-white border-2 border-slate-200 active:bg-slate-50 text-slate-700 rounded-2xl font-bold flex items-center justify-center gap-2 transition-colors"><i class="fa-solid fa-mug-hot"></i> Take Break</button>
+                `;
+            } else if (isBreak) {
+                btnsHtml = `<button onclick="handleAction('BREAK_END')" class="w-full h-14 bg-amber-500 active:bg-amber-600 text-white rounded-2xl font-bold text-lg flex items-center justify-center gap-2 shadow-lg shadow-amber-200 transition-colors"><i class="fa-solid fa-play"></i> Resume Work</button>`;
+            }
+            actionBtns.innerHTML = btnsHtml;
+
+            // Logs
+            const sorted = [...state.userLogs].sort((a, b) => b.timestamp - a.timestamp);
+            logCount.innerText = sorted.length;
+            if (sorted.length === 0) {
+                logsContainer.innerHTML = `<div class="p-4 text-center text-sm text-slate-400">No activity yet.</div>`;
+            } else {
+                let logsHtml = '';
+                sorted.slice(0, 4).forEach(log => {
+                    logsHtml += `
+                        <div class="p-3 flex items-center justify-between">
+                            <span class="text-sm font-semibold text-slate-700">${friendlyActionName(log.type)}</span>
+                            <span class="text-xs font-mono text-slate-500">${formatTimeShort(log.timestamp)}</span>
+                        </div>
+                    `;
+                });
+                if(sorted.length > 4) {
+                    logsHtml += `<div class="p-2 text-center text-xs text-slate-400 font-medium bg-slate-50">View ${sorted.length - 4} more...</div>`;
+                }
+                logsContainer.innerHTML = logsHtml;
+            }
+        }
+
+        function renderOwnerUI() {
+            // Combine real user data + DB team data + Mock fallback (if empty)
+            let sortedLogs = [...state.userLogs].sort((a, b) => b.timestamp - a.timestamp);
+            let mainUserLastAction = sortedLogs.length > 0 ? friendlyActionName(sortedLogs[0].type) : 'No activity';
+            
+            const mainUser = {
+                id: state.user?.uid || 'admin',
+                name: 'John Doe (You)',
+                role: 'System Administrator',
+                status: state.userStatus,
+                secondsWorked: state.userWorkedSeconds,
+                lastAction: mainUserLastAction,
+                isMainUser: true
+            };
+
+            // Use DB team, or fallback to mock if DB is completely empty (just for demo visuals)
+            const activeTeam = state.teamEmployees.length > 0 ? state.teamEmployees : state.mockTeam;
+            const allStaff = [mainUser, ...activeTeam];
+
+            if (state.ownerActiveTab === 'LIVE') {
+                const activeCount = allStaff.filter(e => e.status === 'IN').length;
+                document.getElementById('own-active-count').innerText = activeCount;
+                document.getElementById('own-total-count').innerText = `/ ${allStaff.length}`;
+
+                let html = '';
+                allStaff.forEach(emp => {
+                    let borderClass = 'border-slate-200 text-slate-500 bg-slate-50';
+                    let statusColor = 'text-slate-400';
+                    if(emp.status === 'IN') { borderClass = 'border-green-500 text-green-700 bg-green-50'; statusColor = 'text-green-600'; }
+                    if(emp.status === 'BREAK') { borderClass = 'border-amber-400 text-amber-700 bg-amber-50'; statusColor = 'text-amber-500'; }
+
+                    html += `
+                    <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-3">
+                        <div class="w-12 h-12 rounded-full flex flex-col items-center justify-center shrink-0 border-2 ${borderClass}">
+                            <span class="font-bold text-lg leading-none">${emp.name.charAt(0)}</span>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <p class="font-bold text-slate-900 truncate flex items-center gap-1.5">
+                                ${emp.name} ${emp.isMainUser ? '<i class="fa-solid fa-lock text-[10px] text-slate-400"></i>' : ''}
+                            </p>
+                            <p class="text-xs text-slate-500 truncate">${emp.lastAction || 'Active'}</p>
+                        </div>
+                        <div class="text-right shrink-0">
+                            <p class="text-xs font-bold uppercase ${statusColor}">${emp.status}</p>
+                            <p class="text-sm font-mono font-medium text-slate-700">${formatDuration(emp.secondsWorked || 0)}</p>
+                        </div>
+                    </div>`;
+                });
+                document.getElementById('own-live-list').innerHTML = html;
+            } else {
+                let html = '';
+                allStaff.forEach(emp => {
+                    const empJson = encodeURIComponent(JSON.stringify(emp));
+                    html += `
+                    <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-600">
+                                ${emp.name.charAt(0)}
+                            </div>
+                            <div>
+                                <p class="font-bold text-slate-900 leading-tight">${emp.name}</p>
+                                <p class="text-xs text-slate-500">${emp.role}</p>
+                            </div>
+                        </div>
+                        ${emp.isMainUser 
+                            ? `<span class="text-[10px] uppercase font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded">Admin</span>`
+                            : `<button onclick="openModal('${empJson}')" class="w-10 h-10 rounded-full flex items-center justify-center text-slate-400 active:bg-slate-100"><i class="fa-solid fa-pen"></i></button>`
+                        }
+                    </div>`;
+                });
+                document.getElementById('own-team-list').innerHTML = html;
+            }
+        }
+
+        // Initialize Firebase on load
+        initAuth();
+
+    </script>
+</body>
+</html>
