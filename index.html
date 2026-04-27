@@ -1,624 +1,680 @@
-<!DOCTYPE html>
-<html lang="th">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>TimeTrack - 2026 Practical UI</title>
-    <style>
-        /* --- 2026 Practical Design System --- */
-        :root {
-            /* Color Palette (High Contrast, Clean) */
-            --bg-body: #e4e4e7;
-            --bg-app: #f4f4f5;
-            --bg-card: #ffffff;
-            --bg-input: #f4f4f5;
-            
-            --text-main: #09090b;
-            --text-sec: #52525b;
-            --text-ter: #a1a1aa;
-            
-            --border-light: #e4e4e7;
-            --border-dark: #d4d4d8;
-            
-            /* Semantic Colors (Solid, No Gradients for Professional Look) */
-            --accent: #09090b; /* Black as primary accent */
-            --success: #10b981;
-            --danger: #f43f5e;
-            --warning: #f59e0b;
-            
-            /* Geometry */
-            --rad-sm: 12px;
-            --rad-md: 16px;
-            --rad-lg: 24px;
-            --rad-pill: 99px;
-            
-            /* Shadows (Very subtle, mostly flat design) */
-            --shadow-sm: 0 2px 4px rgba(0,0,0,0.02);
-            --shadow-md: 0 4px 12px rgba(0,0,0,0.04);
-            --shadow-up: 0 -4px 20px rgba(0,0,0,0.03);
+import React, { useState, useEffect } from 'react';
+import { 
+  Clock, Play, Square, Coffee, History, User, LogOut, 
+  CheckCircle2, Users, Briefcase, ChevronRight, 
+  Loader2, Cloud, ShieldCheck, ArrowRight, Lock, Delete, ArrowLeft,
+  Plus, Edit2, Trash2, X, Activity
+} from 'lucide-react';
+
+// --- Firebase Imports ---
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { getFirestore, collection, doc, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
+
+// --- Firebase Setup ---
+const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+export default function App() {
+  // --- Auth & Role State ---
+  const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  
+  // Navigation State
+  const [selectedRole, setSelectedRole] = useState(null); // 'EMPLOYEE' | 'OWNER' | null
+  const [isUnlocked, setIsUnlocked] = useState(false);
+
+  // --- Current User State (Private - Synced to Firestore) ---
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [userStatus, setUserStatus] = useState('OUT');
+  const [userLogs, setUserLogs] = useState([]);
+  const [userWorkedSeconds, setUserWorkedSeconds] = useState(0);
+
+  // --- Team State (Public - Synced to Firestore) ---
+  const [teamEmployees, setTeamEmployees] = useState([]);
+
+  // --- 1. Authentication ---
+  useEffect(() => {
+    const initAuth = async () => {
+      try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
         }
+      } catch (error) {
+        console.error('Authentication Error:', error);
+      }
+    };
+    initAuth();
 
-        /* --- Base & Reset --- */
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            margin: 0; padding: 0; background-color: var(--bg-body); color: var(--text-main);
-            display: flex; justify-content: center; align-items: center; height: 100vh; height: 100dvh;
-            overflow: hidden; touch-action: manipulation;
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setAuthLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // --- 2. Firestore Real-time Sync ---
+  useEffect(() => {
+    if (!user) return;
+
+    const logsRef = collection(db, 'artifacts', appId, 'users', user.uid, 'logs');
+    const unsubLogs = onSnapshot(logsRef, (snapshot) => {
+      const fetchedLogs = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        timestamp: new Date(doc.data().timestamp)
+      }));
+      setUserLogs(fetchedLogs);
+    }, (error) => console.error("Error fetching logs:", error));
+
+    const statusRef = doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'currentStatus');
+    const unsubStatus = onSnapshot(statusRef, (docSnap) => {
+      if (docSnap.exists()) {
+        setUserStatus(docSnap.data().status);
+      } else {
+        setUserStatus('OUT');
+      }
+    }, (error) => console.error("Error fetching status:", error));
+
+    const teamRef = collection(db, 'artifacts', appId, 'public', 'data', 'employees');
+    const unsubTeam = onSnapshot(teamRef, (snapshot) => {
+      const fetchedTeam = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setTeamEmployees(fetchedTeam);
+    }, (error) => console.error("Error fetching team:", error));
+
+    return () => {
+      unsubLogs();
+      unsubStatus();
+      unsubTeam();
+    };
+  }, [user]);
+
+  // --- 3. Global Clock ---
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // --- 4. Real-time Worked Hours Calculation ---
+  useEffect(() => {
+    let total = 0;
+    let currentStartTime = null;
+
+    const sortedLogs = [...userLogs].sort((a, b) => a.timestamp - b.timestamp);
+
+    sortedLogs.forEach((log) => {
+      if (log.type === 'CLOCK_IN' || log.type === 'BREAK_END') {
+        currentStartTime = log.timestamp;
+      } else if (log.type === 'CLOCK_OUT' || log.type === 'BREAK_START') {
+        if (currentStartTime) {
+          total += Math.floor((log.timestamp - currentStartTime) / 1000);
+          currentStartTime = null;
         }
+      }
+    });
 
-        /* --- App Container (Mobile Simulator) --- */
-        #app {
-            width: 100%; max-width: 430px; height: 100%; max-height: 932px; /* iPhone 15 Pro Max size */
-            background-color: var(--bg-app); position: relative;
-            display: flex; flex-direction: column; overflow: hidden;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1); border-radius: 40px;
-        }
-        @media (max-width: 430px) { #app { border-radius: 0; box-shadow: none; } }
+    if (userStatus === 'IN' && currentStartTime) {
+      total += Math.floor((currentTime - currentStartTime) / 1000);
+    }
 
-        /* --- Layout System (Absolute Separation) --- */
-        header {
-            flex: 0 0 auto; padding: 1.5rem 1.5rem 1rem;
-            display: flex; justify-content: space-between; align-items: center;
-            background: var(--bg-app); z-index: 10;
-        }
-        
-        main {
-            flex: 1 1 auto; overflow-y: auto; overflow-x: hidden;
-            padding: 0 1.5rem 1.5rem; display: flex; flex-direction: column;
-            -ms-overflow-style: none; scrollbar-width: none;
-        }
-        main::-webkit-scrollbar { display: none; }
-        
-        #action-zone {
-            flex: 0 0 auto; background: var(--bg-card);
-            border-top: 1px solid var(--border-light);
-            border-radius: 32px 32px 0 0; box-shadow: var(--shadow-up);
-            padding: 1.5rem 1.5rem calc(1.5rem + env(safe-area-inset-bottom));
-            z-index: 40; display: flex; flex-direction: column; gap: 1rem;
-        }
+    setUserWorkedSeconds(total);
+  }, [userLogs, userStatus, currentTime]);
 
-        /* --- Typography & Branding --- */
-        .brand { font-size: 1.2rem; font-weight: 800; letter-spacing: -0.5px; display: flex; align-items: center; gap: 6px; }
-        .brand-dot { width: 8px; height: 8px; background: var(--accent); border-radius: 50%; }
-        
-        .role-tag { font-size: 0.7rem; font-weight: 700; padding: 4px 10px; border-radius: var(--rad-pill); text-transform: uppercase; letter-spacing: 0.5px; }
-        .role-admin { background: #e0e7ff; color: #4f46e5; }
-        .role-emp { background: #dcfce7; color: #059669; }
+  // --- Formatting Helpers ---
+  const formatTime = (date) => {
+    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+  };
+  const formatTimeWithSeconds = (date) => {
+    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+  };
+  const formatDate = (date) => {
+    return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  };
+  const formatDuration = (totalSeconds) => {
+    const h = Math.floor(totalSeconds / 3600);
+    const m = Math.floor((totalSeconds % 3600) / 60);
+    return `${h}h ${m}m`;
+  };
 
-        .title { font-size: 1.25rem; font-weight: 700; margin: 0 0 1rem 0; letter-spacing: -0.5px; }
-        .subtitle { font-size: 0.85rem; color: var(--text-sec); margin-top: -0.75rem; margin-bottom: 1.5rem; }
+  // --- Handlers (Writing to Firestore) ---
+  const handleUserAction = async (actionType) => {
+    if (!user) return;
+    const now = Date.now();
 
-        .time-display { font-size: clamp(4rem, 15vw, 5rem); font-weight: 800; letter-spacing: -3px; line-height: 1; text-align: center; margin: 1rem 0 0; }
-        .date-display { font-size: 1rem; font-weight: 600; color: var(--text-sec); text-align: center; margin-top: 0.5rem; }
+    let newStatus = userStatus;
+    if (actionType === 'CLOCK_IN' || actionType === 'BREAK_END') newStatus = 'IN';
+    if (actionType === 'CLOCK_OUT') newStatus = 'OUT';
+    if (actionType === 'BREAK_START') newStatus = 'BREAK';
 
-        /* --- UI Components --- */
-        .card { background: var(--bg-card); border-radius: var(--rad-lg); padding: 1.25rem; margin-bottom: 1rem; border: 1px solid var(--border-light); }
-        .card-row { display: flex; gap: 1rem; margin-bottom: 1rem; }
-        .card-stat { flex: 1; background: var(--bg-card); border-radius: var(--rad-lg); padding: 1.25rem; border: 1px solid var(--border-light); display: flex; flex-direction: column; justify-content: center; }
-        
-        /* Forms */
-        .input-group { margin-bottom: 1rem; }
-        .input-label { display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-sec); margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.5px; }
-        .input-el { width: 100%; padding: 1rem 1.2rem; background: var(--bg-input); border: 1px solid transparent; border-radius: var(--rad-md); font-size: 1rem; font-weight: 500; color: var(--text-main); font-family: inherit; transition: 0.2s; }
-        .input-el:focus { border-color: var(--accent); background: var(--bg-card); outline: none; }
-        textarea.input-el { resize: vertical; min-height: 80px; }
+    setUserStatus(newStatus); 
 
-        /* Buttons */
-        .btn { width: 100%; padding: 1.2rem; border-radius: var(--rad-md); font-size: 1.05rem; font-weight: 700; border: none; cursor: pointer; transition: transform 0.15s ease, opacity 0.15s ease; display: flex; justify-content: center; align-items: center; gap: 8px; }
-        .btn:active { transform: scale(0.96); opacity: 0.9; }
-        
-        .btn-primary { background: var(--accent); color: #fff; }
-        .btn-success { background: var(--success); color: #fff; }
-        .btn-danger { background: var(--danger); color: #fff; }
-        .btn-outline { background: transparent; border: 2px solid var(--border-dark); color: var(--text-main); }
-        .btn-ghost { background: transparent; color: var(--text-sec); padding: 0.8rem; font-size: 0.9rem; }
-        .btn-ghost:active { background: var(--bg-input); }
+    try {
+      const logsRef = collection(db, 'artifacts', appId, 'users', user.uid, 'logs');
+      await addDoc(logsRef, { type: actionType, timestamp: now });
 
-        /* Lists */
-        .list-wrap { display: flex; flex-direction: column; gap: 0.5rem; }
-        .list-item { background: var(--bg-card); border: 1px solid var(--border-light); border-radius: var(--rad-md); padding: 1rem 1.2rem; display: flex; justify-content: space-between; align-items: center; }
-        .item-col { display: flex; flex-direction: column; gap: 4px; }
-        .item-head { font-weight: 600; font-size: 0.95rem; }
-        .item-sub { font-size: 0.8rem; color: var(--text-sec); font-weight: 500; }
+      const statusRef = doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'currentStatus');
+      await setDoc(statusRef, { status: newStatus, updatedAt: now });
+    } catch (error) {
+      console.error("Error saving action:", error);
+    }
+  };
 
-        /* Status Badges */
-        .badge { font-size: 0.75rem; font-weight: 700; padding: 4px 10px; border-radius: 6px; white-space: nowrap; }
-        .bg-in { background: #dcfce7; color: #059669; }
-        .bg-out { background: #f1f5f9; color: #475569; }
-        .bg-pend { background: #fef3c7; color: #d97706; }
-        .bg-appr { background: #dcfce7; color: #059669; }
-        .bg-rej { background: #ffe4e6; color: #e11d48; }
+  const handleAddEmployee = async (empData) => {
+    if (!user) return;
+    try {
+      const teamRef = collection(db, 'artifacts', appId, 'public', 'data', 'employees');
+      await addDoc(teamRef, {
+        ...empData,
+        status: 'OUT',
+        secondsWorked: 0,
+        lastAction: 'Account Created',
+        createdAt: Date.now()
+      });
+    } catch (error) {
+      console.error("Error adding employee:", error);
+    }
+  };
 
-        /* --- 2026 Smart Numpad --- */
-        .numpad-area { display: flex; flex-direction: column; align-items: center; width: 100%; }
-        .pin-display { display: flex; gap: 1rem; margin-bottom: 1.5rem; height: 16px; align-items: center; }
-        .pin-dot { width: 12px; height: 12px; border-radius: 12px; background: var(--border-dark); transition: 0.2s ease-out; }
-        .pin-dot.filled { width: 24px; background: var(--accent); }
-        .pin-dot.error { background: var(--danger); width: 12px; }
-        
-        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
-        .shake { animation: shake 0.3s ease-in-out; }
+  const handleUpdateEmployee = async (id, empData) => {
+    if (!user) return;
+    try {
+      const empRef = doc(db, 'artifacts', appId, 'public', 'data', 'employees', id);
+      await updateDoc(empRef, empData);
+    } catch (error) {
+      console.error("Error updating employee:", error);
+    }
+  };
 
-        .numpad-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; width: 100%; max-width: 320px; }
-        .num-key { background: var(--bg-input); border: none; border-radius: var(--rad-md); aspect-ratio: 1.3/1; font-size: 1.75rem; font-weight: 600; color: var(--text-main); cursor: pointer; transition: 0.1s; user-select: none; }
-        .num-key:active { background: var(--border-dark); transform: scale(0.92); }
-        .num-key.action { font-size: 1.2rem; font-weight: 700; color: var(--text-sec); background: transparent; }
+  const handleDeleteEmployee = async (id) => {
+    if (!user) return;
+    try {
+      const empRef = doc(db, 'artifacts', appId, 'public', 'data', 'employees', id);
+      await deleteDoc(empRef);
+    } catch (error) {
+      console.error("Error deleting employee:", error);
+    }
+  };
 
-        /* --- Bottom Navigation (Admin Only) --- */
-        #bottom-nav {
-            display: flex; background: var(--bg-card); border-top: 1px solid var(--border-light);
-            padding: 0.5rem 1rem calc(0.5rem + env(safe-area-inset-bottom)); z-index: 50;
-        }
-        .nav-tab { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 0.5rem 0; color: var(--text-ter); font-size: 0.65rem; font-weight: 700; cursor: pointer; transition: 0.2s; border-radius: var(--rad-md); }
-        .nav-tab svg { width: 24px; height: 24px; stroke-width: 2px; }
-        .nav-tab.active { color: var(--accent); }
+  const handleLogout = () => {
+    setIsUnlocked(false);
+    setSelectedRole(null);
+  };
 
-        /* Helpers */
-        .hide { display: none !important; }
-        .empty { text-align: center; padding: 2rem; color: var(--text-ter); font-weight: 500; font-size: 0.9rem; }
-    </style>
-</head>
-<body>
+  // --- Prepare Data ---
+  const sortedUserLogs = [...userLogs].sort((a, b) => b.timestamp - a.timestamp);
+  const lastActionString = sortedUserLogs.length > 0 
+    ? `${sortedUserLogs[0].type.replace('_', ' ')}` 
+    : 'No activity';
 
-    <div id="app">
-        <!-- HEADER -->
-        <header>
-            <div class="brand"><div class="brand-dot"></div>TimeTrack</div>
-            <div class="header-actions">
-                <div id="role-badge"></div>
-                <button class="btn-logout hide" id="btn-logout" onclick="logout()">ออกระบบ</button>
-            </div>
-        </header>
+  const allEmployees = [
+    { 
+      id: user?.uid || '1', 
+      name: 'John (You)', 
+      role: 'Admin', 
+      status: userStatus, 
+      secondsWorked: userWorkedSeconds,
+      lastAction: lastActionString,
+      isMainUser: true
+    },
+    ...teamEmployees
+  ];
 
-        <!-- MAIN SCROLLABLE CONTENT -->
-        <main id="main-view"></main>
-
-        <!-- FIXED THUMB ACTION ZONE -->
-        <div id="action-zone" class="hide"></div>
-
-        <!-- ADMIN BOTTOM NAV -->
-        <nav id="bottom-nav" class="hide"></nav>
+  // --- Renders ---
+  
+  // Mobile Wrapper Container
+  const AppWrapper = ({ children }) => (
+    <div className="w-full h-screen sm:h-[90vh] sm:max-h-[850px] sm:max-w-[400px] sm:mx-auto sm:my-[5vh] bg-slate-50 sm:rounded-[2.5rem] sm:shadow-2xl overflow-hidden relative flex flex-col font-sans border-slate-200 sm:border-[8px]">
+      {children}
     </div>
+  );
 
-    <!-- Firebase SDK (ES Modules) -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+  if (authLoading) {
+    return (
+      <AppWrapper>
+        <div className="flex-1 flex flex-col items-center justify-center text-slate-500 gap-4">
+          <Loader2 size={32} className="animate-spin text-indigo-500" />
+          <p className="font-medium animate-pulse text-sm">Connecting to cloud...</p>
+        </div>
+      </AppWrapper>
+    );
+  }
 
-        // Firebase Setup
-        const firebaseConfig = {
-            apiKey: "AIzaSyBHuZGyY1F3v4rCrhrpt9YB90C0Ahh-stE",
-            authDomain: "my-company-time-tracking.firebaseapp.com",
-            projectId: "my-company-time-tracking",
-            storageBucket: "my-company-time-tracking.firebasestorage.app",
-            messagingSenderId: "758524847747",
-            appId: "1:758524847747:web:2e5a49e4064334f1265db6",
-            measurementId: "G-50SYJKTRT1"
-        };
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
+  // 1. Role Selection Screen (Login)
+  if (!selectedRole) {
+    return (
+      <AppWrapper>
+        <div className="flex flex-col h-full p-6 justify-center">
+          <div className="text-center mb-10 mt-[-10%]">
+            <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-indigo-200">
+              <Clock size={32} className="text-white" />
+            </div>
+            <h1 className="text-3xl font-bold text-slate-900 tracking-tight">TimeTracker</h1>
+            <p className="text-slate-500 mt-1 flex items-center justify-center gap-1.5 text-sm">
+              <Cloud size={14} className="text-indigo-400" /> Cloud Synced
+            </p>
+          </div>
 
-        // --- Global State ---
-        let records = [], employees = [], requests = [], adminPin = null;
-        let currentUser = JSON.parse(sessionStorage.getItem('currentUser')) || null;
-        let isReady = false, loaded = { emp: false, rec: false, sys: false, req: false };
-        let clockInterval;
-        let currentPin = "";
-        let pendingAction = null; // 'setup' | null
+          <div className="space-y-4">
+            <button 
+              onClick={() => setSelectedRole('EMPLOYEE')}
+              className="w-full bg-white p-5 rounded-2xl border border-slate-200 flex items-center gap-4 active:scale-95 transition-transform shadow-sm"
+            >
+              <div className="w-12 h-12 bg-indigo-50 rounded-full flex items-center justify-center shrink-0">
+                <User size={24} className="text-indigo-600" />
+              </div>
+              <div className="text-left flex-1">
+                <h2 className="text-lg font-bold text-slate-900">Employee</h2>
+                <p className="text-xs text-slate-500 line-clamp-1">Track time & breaks</p>
+              </div>
+              <ChevronRight size={20} className="text-slate-300" />
+            </button>
 
-        // --- DOM Elements ---
-        const vMain = document.getElementById('main-view');
-        const vAction = document.getElementById('action-zone');
-        const vNav = document.getElementById('bottom-nav');
-        const eRole = document.getElementById('role-badge');
-        const eLogout = document.getElementById('btn-logout');
+            <button 
+              onClick={() => setSelectedRole('OWNER')}
+              className="w-full bg-slate-900 p-5 rounded-2xl border border-slate-800 flex items-center gap-4 active:scale-95 transition-transform shadow-md"
+            >
+              <div className="w-12 h-12 bg-slate-800 rounded-full flex items-center justify-center shrink-0">
+                <ShieldCheck size={24} className="text-slate-300" />
+              </div>
+              <div className="text-left flex-1">
+                <h2 className="text-lg font-bold text-white">Owner</h2>
+                <p className="text-xs text-slate-400 line-clamp-1">Manage team</p>
+              </div>
+              <ChevronRight size={20} className="text-slate-600" />
+            </button>
+          </div>
+        </div>
+      </AppWrapper>
+    );
+  }
 
-        // --- Initialization ---
-        vMain.innerHTML = '<div style="flex:1;display:flex;align-items:center;justify-content:center;font-weight:600;color:var(--text-ter);">กำลังเชื่อมต่อ...</div>';
+  // 2. PIN Pad Entry Screen
+  if (selectedRole && !isUnlocked) {
+    const expectedPin = selectedRole === 'EMPLOYEE' ? '1234' : '8888';
+    return (
+      <AppWrapper>
+        <PinPadScreen 
+          role={selectedRole} 
+          expectedPin={expectedPin} 
+          onSuccess={() => setIsUnlocked(true)} 
+          onCancel={() => setSelectedRole(null)} 
+        />
+      </AppWrapper>
+    );
+  }
+
+  // 3. Main App Container
+  return (
+    <AppWrapper>
+      {/* Mobile Top Bar */}
+      <nav className={`px-4 py-3 flex items-center justify-between shadow-sm z-50 ${selectedRole === 'OWNER' ? 'bg-slate-900 text-white' : 'bg-white border-b border-slate-100 text-slate-900'}`}>
+        <div className="flex items-center gap-2">
+          {selectedRole === 'OWNER' ? <ShieldCheck size={20} className="text-indigo-400" /> : <Clock size={20} className="text-indigo-600" />}
+          <span className="font-bold text-md tracking-tight">
+            {selectedRole === 'OWNER' ? 'Admin' : 'TimeTracker'}
+          </span>
+        </div>
+        <button
+          onClick={handleLogout}
+          className={`p-2 rounded-full active:bg-slate-200 transition-colors ${selectedRole === 'OWNER' ? 'text-slate-300 hover:bg-slate-800' : 'text-slate-500 bg-slate-50'}`}
+        >
+          <LogOut size={18} />
+        </button>
+      </nav>
+
+      <div className="flex-1 overflow-auto bg-slate-50">
+        {selectedRole === 'EMPLOYEE' ? (
+          <EmployeeView 
+            currentTime={currentTime}
+            status={userStatus}
+            logs={sortedUserLogs}
+            workedSeconds={userWorkedSeconds}
+            handleAction={handleUserAction}
+            formatTimeWithSeconds={formatTimeWithSeconds}
+            formatDate={formatDate}
+            formatDuration={formatDuration}
+          />
+        ) : (
+          <OwnerDashboard 
+            employees={allEmployees}
+            formatDuration={formatDuration}
+            onAddEmployee={handleAddEmployee}
+            onUpdateEmployee={handleUpdateEmployee}
+            onDeleteEmployee={handleDeleteEmployee}
+          />
+        )}
+      </div>
+    </AppWrapper>
+  );
+}
+
+// ==========================================
+// PIN PAD SCREEN COMPONENT (Mobile Optimized)
+// ==========================================
+function PinPadScreen({ role, expectedPin, onSuccess, onCancel }) {
+  const [pin, setPin] = useState('');
+  const [error, setError] = useState(false);
+
+  const handleNumberClick = (num) => {
+    if (pin.length < 4) {
+      const newPin = pin + num;
+      setPin(newPin);
+      setError(false);
+      if (newPin.length === 4) verifyPin(newPin);
+    }
+  };
+
+  const verifyPin = (enteredPin) => {
+    if (enteredPin === expectedPin) {
+      setTimeout(() => onSuccess(), 150); 
+    } else {
+      setError(true);
+      setTimeout(() => setPin(''), 400); 
+    }
+  };
+
+  return (
+    <div className="flex flex-col h-full bg-white relative">
+      <button onClick={onCancel} className="absolute top-4 left-4 p-2 text-slate-400 active:bg-slate-100 rounded-full z-10">
+        <ArrowLeft size={24} />
+      </button>
+
+      <div className="flex-1 flex flex-col items-center justify-center p-6">
+        <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-4 
+          ${role === 'OWNER' ? 'bg-slate-100 text-slate-700' : 'bg-indigo-50 text-indigo-600'}`}>
+          <Lock size={28} />
+        </div>
+        <h2 className="text-2xl font-bold text-slate-900 mb-1">Enter PIN</h2>
+        <span className="font-mono text-xs bg-slate-100 text-slate-500 px-2 py-1 rounded mt-1">Hint: {expectedPin}</span>
+
+        <div className={`flex gap-4 mt-8 ${error ? 'animate-pulse' : ''}`}>
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className={`w-4 h-4 rounded-full transition-colors 
+              ${pin.length > i ? (error ? 'bg-rose-500' : 'bg-slate-800') : 'bg-slate-200'}`} />
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-slate-50 p-6 grid grid-cols-3 gap-y-4 gap-x-6 pb-10">
+        {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => (
+          <button key={num} onClick={() => handleNumberClick(num.toString())}
+            className="h-16 rounded-full flex items-center justify-center text-3xl font-medium text-slate-800 active:bg-slate-200 transition-colors"
+          >{num}</button>
+        ))}
+        <div />
+        <button onClick={() => handleNumberClick('0')}
+          className="h-16 rounded-full flex items-center justify-center text-3xl font-medium text-slate-800 active:bg-slate-200 transition-colors"
+        >0</button>
+        <button onClick={() => { setPin(pin.slice(0, -1)); setError(false); }}
+          className="h-16 rounded-full flex items-center justify-center text-slate-600 active:bg-slate-200 transition-colors"
+        ><Delete size={28} /></button>
+      </div>
+    </div>
+  );
+}
+
+
+// ==========================================
+// EMPLOYEE VIEW (Mobile Optimized)
+// ==========================================
+function EmployeeView({ currentTime, status, logs, workedSeconds, handleAction, formatTimeWithSeconds, formatDate, formatDuration }) {
+  const isOut = status === 'OUT';
+  const isIn = status === 'IN';
+  const isBreak = status === 'BREAK';
+
+  return (
+    <div className="flex flex-col h-full bg-slate-50 pb-6">
+      
+      {/* Mobile Profile Header */}
+      <div className="px-6 py-5 bg-white flex items-center justify-between border-b border-slate-100 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center overflow-hidden">
+            <User size={24} className="text-slate-400" />
+          </div>
+          <div>
+            <h2 className="font-bold text-slate-900 text-lg leading-tight">John Doe</h2>
+            <p className="text-xs text-slate-500">{formatDate(currentTime)}</p>
+          </div>
+        </div>
+        <div className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider
+          ${isIn ? 'bg-green-100 text-green-700' : isBreak ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>
+          {status}
+        </div>
+      </div>
+
+      {/* Main Clock Area */}
+      <div className="flex-1 flex flex-col items-center justify-center py-6 px-4 shrink-0">
+        <div className="w-48 h-48 rounded-full bg-white shadow-xl shadow-indigo-100/50 border-[6px] border-slate-50 flex flex-col items-center justify-center relative mb-6">
+          {isIn && <div className="absolute inset-0 rounded-full border-4 border-green-500 opacity-20 animate-ping" style={{ animationDuration: '3s'}}></div>}
+          <div className="text-4xl font-bold text-slate-800 tracking-tighter font-mono">
+            {formatTimeWithSeconds(currentTime).split(' ')[0]}
+          </div>
+          <div className="text-sm font-bold text-slate-400 mt-1 uppercase">
+            {formatTimeWithSeconds(currentTime).split(' ')[1]}
+          </div>
+        </div>
         
-        signInAnonymously(auth).then(() => {
-            onSnapshot(collection(db, "employees"), (s) => { employees = s.docs.map(d => ({id: d.id, ...d.data()})); loaded.emp = true; checkReady(); });
-            onSnapshot(collection(db, "timeRecords"), (s) => { records = s.docs.map(d => ({id: d.id, ...d.data()})).sort((a,b)=>new Date(a.timestamp)-new Date(b.timestamp)); loaded.rec = true; checkReady(); });
-            onSnapshot(collection(db, "system"), (s) => { const ad = s.docs.find(d => d.id === 'settings'); adminPin = ad ? ad.data().adminPin : null; loaded.sys = true; checkReady(); });
-            onSnapshot(collection(db, "requests"), (s) => { requests = s.docs.map(d => ({id: d.id, ...d.data()})).sort((a,b)=>new Date(b.timestamp)-new Date(a.timestamp)); loaded.req = true; checkReady(); });
-        }).catch(() => { vMain.innerHTML = '<div class="empty" style="color:var(--danger);">เชื่อมต่อล้มเหลว กรุณาตรวจสอบอินเทอร์เน็ต</div>'; });
+        <div className="flex items-center gap-2 text-indigo-600 bg-indigo-50 px-4 py-2 rounded-full">
+          <Activity size={16} />
+          <span className="font-bold text-sm">{formatDuration(workedSeconds)} Active</span>
+        </div>
+      </div>
 
-        function checkReady() {
-            if (loaded.emp && loaded.rec && loaded.sys && loaded.req) {
-                isReady = true; updateLayout(); route();
-            }
-        }
+      {/* Action Buttons (Sticky at bottom-ish) */}
+      <div className="px-6 space-y-3 shrink-0">
+        {isOut && (
+          <button onClick={() => handleAction('CLOCK_IN')} className="w-full h-14 bg-indigo-600 active:bg-indigo-700 text-white rounded-2xl font-bold text-lg flex items-center justify-center gap-2 shadow-lg shadow-indigo-200 transition-colors">
+            <Play fill="currentColor" size={20} /> Clock In
+          </button>
+        )}
+        
+        {isIn && (
+          <>
+            <button onClick={() => handleAction('CLOCK_OUT')} className="w-full h-14 bg-rose-500 active:bg-rose-600 text-white rounded-2xl font-bold text-lg flex items-center justify-center gap-2 shadow-lg shadow-rose-200 transition-colors">
+              <Square fill="currentColor" size={20} /> Clock Out
+            </button>
+            <button onClick={() => handleAction('BREAK_START')} className="w-full h-12 bg-white border-2 border-slate-200 active:bg-slate-50 text-slate-700 rounded-2xl font-bold flex items-center justify-center gap-2 transition-colors">
+              <Coffee size={20} /> Take Break
+            </button>
+          </>
+        )}
 
-        // --- Utility ---
-        function getEmpStatus(empId) {
-            const empRecs = records.filter(r => r.empId === empId);
-            return empRecs.length === 0 ? 'OUT' : empRecs[empRecs.length - 1].type;
-        }
+        {isBreak && (
+          <button onClick={() => handleAction('BREAK_END')} className="w-full h-14 bg-amber-500 active:bg-amber-600 text-white rounded-2xl font-bold text-lg flex items-center justify-center gap-2 shadow-lg shadow-amber-200 transition-colors">
+            <Play fill="currentColor" size={20} /> Resume Work
+          </button>
+        )}
+      </div>
 
-        function startClock() {
-            clearInterval(clockInterval);
-            const tick = () => {
-                const now = new Date();
-                const elTime = document.getElementById('clock-time');
-                const elDate = document.getElementById('clock-date');
-                if(elTime) elTime.textContent = now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
-                if(elDate) elDate.textContent = now.toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'short' });
-            };
-            tick(); clockInterval = setInterval(tick, 1000);
-        }
+      {/* Recent Activity Mini List */}
+      {logs.length > 0 && (
+         <div className="px-6 mt-8 shrink-0">
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Today's Punches</p>
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden divide-y divide-slate-50">
+            {logs.slice(0, 3).map(log => (
+              <div key={log.id} className="p-3 flex items-center justify-between">
+                <span className="text-sm font-semibold text-slate-700 capitalize">{log.type.replace('_', ' ').toLowerCase()}</span>
+                <span className="text-xs font-mono text-slate-500">
+                  {log.timestamp.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                </span>
+              </div>
+            ))}
+            {logs.length > 3 && <div className="p-2 text-center text-xs text-slate-400 font-medium bg-slate-50">View {logs.length - 3} more...</div>}
+          </div>
+         </div>
+      )}
+    </div>
+  );
+}
 
-        function formatStatus(status) {
-            if(status === 'PENDING') return '<span class="badge bg-pend">รอพิจารณา</span>';
-            if(status === 'APPROVED') return '<span class="badge bg-appr">อนุมัติ</span>';
-            return '<span class="badge bg-rej">ปฏิเสธ</span>';
-        }
+// ==========================================
+// OWNER DASHBOARD (Mobile Optimized)
+// ==========================================
+function OwnerDashboard({ employees, formatDuration, onAddEmployee, onUpdateEmployee, onDeleteEmployee }) {
+  const [activeTab, setActiveTab] = useState('LIVE'); // 'LIVE' | 'TEAM'
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingEmployee, setEditingEmployee] = useState(null);
+  const [formData, setFormData] = useState({ name: '', role: '', pin: '' });
 
-        // --- Core UI Logic ---
-        function updateLayout() {
-            if (!currentUser) {
-                eRole.innerHTML = ''; eLogout.classList.add('hide'); vNav.classList.add('hide'); vAction.classList.remove('hide');
-            } else if (currentUser.role === 'admin') {
-                eRole.innerHTML = '<span class="role-tag role-admin">Admin</span>'; eLogout.classList.remove('hide');
-                vNav.classList.remove('hide'); vAction.classList.add('hide'); // Admin mostly uses lists/forms in main view
-                vNav.innerHTML = `
-                    <div class="nav-tab" onclick="nav('ad-dash')" id="tab-ad-dash"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>แดชบอร์ด</div>
-                    <div class="nav-tab" onclick="nav('ad-emp')" id="tab-ad-emp"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>ทีมงาน</div>
-                    <div class="nav-tab" onclick="nav('ad-req')" id="tab-ad-req"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>คำขอ</div>
-                `;
-            } else {
-                eRole.innerHTML = '<span class="role-tag role-emp">Staff</span>'; eLogout.classList.remove('hide');
-                vNav.classList.remove('hide'); vAction.classList.add('hide'); // Emp uses action zone contextually
-                vNav.innerHTML = `
-                    <div class="nav-tab" onclick="nav('em-dash')" id="tab-em-dash"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>ลงเวลา</div>
-                    <div class="nav-tab" onclick="nav('em-req')" id="tab-em-req"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>คำขอลางาน</div>
-                `;
-            }
-        }
+  const activeCount = employees.filter(e => e.status === 'IN').length;
 
-        // --- Numpad System (Smart Entry) ---
-        window.typePin = function(val) {
-            if (val === 'C') currentPin = "";
-            else if (val === '<') currentPin = currentPin.slice(0, -1);
-            else if (currentPin.length < 4) currentPin += val;
+  const openModal = (emp = null) => {
+    setEditingEmployee(emp);
+    setFormData(emp ? { name: emp.name, role: emp.role, pin: emp.pin || '' } : { name: '', role: '', pin: '' });
+    setIsModalOpen(true);
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!formData.name.trim()) return;
+    editingEmployee ? onUpdateEmployee(editingEmployee.id, formData) : onAddEmployee(formData);
+    setIsModalOpen(false);
+  };
+
+  return (
+    <div className="flex flex-col h-full bg-slate-50 relative pb-20">
+      
+      {/* Sticky Tab Bar */}
+      <div className="bg-white px-4 py-3 border-b border-slate-200 sticky top-0 z-10">
+        <div className="flex bg-slate-100 p-1 rounded-xl">
+          <button onClick={() => setActiveTab('LIVE')} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${activeTab === 'LIVE' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>Live</button>
+          <button onClick={() => setActiveTab('TEAM')} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${activeTab === 'TEAM' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>Directory</button>
+        </div>
+      </div>
+
+      <div className="p-4 flex-1 overflow-y-auto">
+        
+        {/* --- LIVE TAB --- */}
+        {activeTab === 'LIVE' && (
+          <div className="space-y-4 animate-in fade-in duration-300">
+            {/* Minimal KPI */}
+            <div className="bg-slate-900 rounded-2xl p-5 text-white flex justify-between items-center shadow-lg">
+              <div>
+                <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Working Now</p>
+                <div className="text-3xl font-bold flex items-baseline gap-2">
+                  {activeCount} <span className="text-lg text-slate-500">/ {employees.length}</span>
+                </div>
+              </div>
+              <div className="w-12 h-12 rounded-full bg-green-500/20 flex items-center justify-center">
+                <div className="w-4 h-4 rounded-full bg-green-500 animate-pulse" />
+              </div>
+            </div>
+
+            <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider px-2 mt-6">Current Status</h3>
+            <div className="space-y-3">
+              {employees.map((emp) => (
+                <div key={emp.id} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-3">
+                  <div className={`w-12 h-12 rounded-full flex flex-col items-center justify-center shrink-0 border-2
+                    ${emp.status === 'IN' ? 'border-green-500 text-green-700 bg-green-50' : 
+                      emp.status === 'BREAK' ? 'border-amber-400 text-amber-700 bg-amber-50' : 
+                      'border-slate-200 text-slate-500 bg-slate-50'}`}>
+                    <span className="font-bold text-lg leading-none">{emp.name.charAt(0)}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-slate-900 truncate flex items-center gap-1.5">
+                      {emp.name} {emp.isMainUser && <Lock size={12} className="text-slate-400" />}
+                    </p>
+                    <p className="text-xs text-slate-500 truncate">{emp.lastAction}</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className={`text-xs font-bold uppercase ${emp.status === 'IN' ? 'text-green-600' : emp.status === 'BREAK' ? 'text-amber-500' : 'text-slate-400'}`}>
+                      {emp.status}
+                    </p>
+                    <p className="text-sm font-mono font-medium text-slate-700">{formatDuration(emp.secondsWorked)}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* --- DIRECTORY TAB --- */}
+        {activeTab === 'TEAM' && (
+          <div className="space-y-3 animate-in fade-in duration-300">
+             {employees.map((emp) => (
+                <div key={emp.id} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-600">
+                      {emp.name.charAt(0)}
+                    </div>
+                    <div>
+                      <p className="font-bold text-slate-900 leading-tight">{emp.name}</p>
+                      <p className="text-xs text-slate-500">{emp.role}</p>
+                    </div>
+                  </div>
+                  
+                  {emp.isMainUser ? (
+                    <span className="text-[10px] uppercase font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded">Admin</span>
+                  ) : (
+                    <div className="flex gap-1">
+                       <button onClick={() => openModal(emp)} className="w-10 h-10 rounded-full flex items-center justify-center text-slate-400 active:bg-slate-100">
+                         <Edit2 size={18} />
+                       </button>
+                    </div>
+                  )}
+                </div>
+             ))}
+          </div>
+        )}
+      </div>
+
+      {/* Floating Action Button (Only in Team Tab) */}
+      {activeTab === 'TEAM' && (
+        <button 
+          onClick={() => openModal()}
+          className="absolute bottom-6 right-6 w-14 h-14 bg-indigo-600 text-white rounded-full flex items-center justify-center shadow-lg shadow-indigo-300 active:scale-95 transition-transform z-20"
+        >
+          <Plus size={24} />
+        </button>
+      )}
+
+      {/* Mobile Add/Edit Modal (Bottom Sheet style) */}
+      {isModalOpen && (
+        <div className="absolute inset-0 z-50 flex flex-col justify-end bg-slate-900/40 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white w-full rounded-t-3xl pt-6 pb-8 px-6 shadow-2xl animate-in slide-in-from-bottom-full duration-300">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-slate-900">{editingEmployee ? 'Edit Info' : 'New Member'}</h3>
+              <button onClick={() => setIsModalOpen(false)} className="bg-slate-100 p-2 rounded-full text-slate-500"><X size={20}/></button>
+            </div>
             
-            drawPinDots();
-            if (currentPin.length === 4) setTimeout(() => processPin(), 100);
-        };
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <input type="text" required placeholder="Full Name" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})}
+                className="w-full bg-slate-50 px-4 py-4 rounded-xl border border-slate-200 outline-none focus:border-indigo-500 focus:bg-white transition-colors text-slate-900" />
+              <input type="text" required placeholder="Role (e.g. Designer)" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})}
+                className="w-full bg-slate-50 px-4 py-4 rounded-xl border border-slate-200 outline-none focus:border-indigo-500 focus:bg-white transition-colors text-slate-900" />
+              
+              <div className="pt-2">
+                 <input type="text" maxLength="4" pattern="\d*" placeholder="4-Digit PIN (Optional)" value={formData.pin} onChange={e => setFormData({...formData, pin: e.target.value.replace(/\D/g, '')})}
+                  className="w-full bg-slate-50 px-4 py-4 rounded-xl border border-slate-200 outline-none focus:border-indigo-500 focus:bg-white transition-colors text-slate-900 font-mono tracking-widest" />
+              </div>
 
-        function drawPinDots() {
-            const wrap = document.getElementById('pin-wrap');
-            if(!wrap) return;
-            wrap.innerHTML = Array.from({length:4}).map((_,i) => `<div class="pin-dot ${i<currentPin.length?'filled':''} ${currentPin==='err'?'error':''}"></div>`).join('');
-        }
+              <div className="pt-4 flex gap-3">
+                {editingEmployee && (
+                   <button type="button" onClick={() => { if(window.confirm('Remove this employee?')) { onDeleteEmployee(editingEmployee.id); setIsModalOpen(false); } }} 
+                     className="w-14 h-14 bg-rose-50 text-rose-500 rounded-xl flex items-center justify-center shrink-0">
+                     <Trash2 size={20} />
+                   </button>
+                )}
+                <button type="submit" className="flex-1 h-14 bg-indigo-600 text-white font-bold rounded-xl active:bg-indigo-700 transition-colors">
+                  {editingEmployee ? 'Save' : 'Add Member'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
-        function processPin() {
-            if (pendingAction === 'setup') {
-                setDoc(doc(db, "system", "settings"), { adminPin: currentPin });
-                adminPin = currentPin; nav('login'); return;
-            }
-            
-            if (currentPin === adminPin) {
-                currentUser = { role: 'admin' }; sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
-                updateLayout(); nav('ad-dash');
-            } else {
-                const emp = employees.find(e => e.pin === currentPin);
-                if (emp) {
-                    currentUser = { role: 'emp', id: emp.id, name: emp.name };
-                    sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
-                    updateLayout(); nav('em-dash');
-                } else {
-                    currentPin = 'err'; drawPinDots(); document.getElementById('pin-wrap').classList.add('shake');
-                    setTimeout(() => { document.getElementById('pin-wrap').classList.remove('shake'); currentPin = ""; drawPinDots(); }, 300);
-                }
-            }
-        }
-
-        function renderNumpad() {
-            return `
-                <div class="numpad-area">
-                    <div class="pin-display" id="pin-wrap">
-                        <div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div>
-                    </div>
-                    <div class="numpad-grid">
-                        ${[1,2,3,4,5,6,7,8,9].map(n => `<button class="num-key" onclick="typePin('${n}')">${n}</button>`).join('')}
-                        <button class="num-key action" onclick="typePin('C')">ล้าง</button>
-                        <button class="num-key" onclick="typePin('0')">0</button>
-                        <button class="num-key action" onclick="typePin('<')">ลบ</button>
-                    </div>
-                </div>
-            `;
-        }
-
-        // --- VIEWS: UNAUTHENTICATED ---
-        function viewSetup() {
-            pendingAction = 'setup'; currentPin = "";
-            vMain.innerHTML = `
-                <div style="flex:1; display:flex; flex-direction:column; justify-content:center; align-items:center;">
-                    <h1 class="title">ตั้งค่าเริ่มต้น</h1>
-                    <p class="subtitle">กำหนดรหัส PIN 4 หลักสำหรับเจ้าของร้าน</p>
-                </div>
-            `;
-            vAction.innerHTML = renderNumpad();
-        }
-
-        function viewLogin() {
-            pendingAction = null; currentPin = "";
-            vMain.innerHTML = `
-                <div style="flex:1; display:flex; flex-direction:column; justify-content:center; align-items:center;">
-                    <div class="time-display" id="clock-time">00:00</div>
-                    <div class="date-display" id="clock-date">--</div>
-                    <p style="margin-top:2rem; font-weight:600; color:var(--text-sec);">เข้าสู่ระบบ / ลงเวลา</p>
-                </div>
-            `;
-            vAction.innerHTML = renderNumpad();
-            startClock();
-        }
-
-        // --- VIEWS: EMPLOYEE ---
-        function viewEmpDash() {
-            vAction.classList.remove('hide');
-            const status = getEmpStatus(currentUser.id);
-            const isIn = status === 'IN';
-            
-            const btnHtml = isIn 
-                ? `<button class="btn btn-danger" onclick="doPunch('OUT')">ลงเวลาออกงาน</button>`
-                : `<button class="btn btn-success" onclick="doPunch('IN')">ลงเวลาเข้างาน</button>`;
-
-            const myRecs = records.filter(r => r.empId === currentUser.id).reverse().slice(0, 5);
-            let recsHtml = myRecs.length ? myRecs.map(r => `
-                <div class="list-item">
-                    <div class="item-col">
-                        <span class="item-head">${r.dateString}</span>
-                        <span class="item-sub">${r.timeString}</span>
-                    </div>
-                    <span class="badge ${r.type==='IN'?'bg-in':'bg-out'}">${r.type==='IN'?'เข้างาน':'ออกงาน'}</span>
-                </div>
-            `).join('') : '<div class="empty">ยังไม่มีประวัติ</div>';
-
-            vMain.innerHTML = `
-                <div style="padding: 1rem 0;">
-                    <h2 class="title" style="font-size:1.5rem;">สวัสดี, ${currentUser.name}</h2>
-                    <div style="display:flex; align-items:center; gap:8px;">
-                        <span style="font-size:0.85rem; font-weight:600; color:var(--text-sec);">สถานะปัจจุบัน:</span>
-                        <span class="badge ${isIn?'bg-in':'bg-out'}">${isIn?'กำลังทำงาน':'ยังไม่เข้างาน'}</span>
-                    </div>
-                </div>
-                <div class="title" style="margin-top:1.5rem; font-size:1rem;">ประวัติล่าสุด</div>
-                <div class="list-wrap" style="padding-bottom:120px;">${recsHtml}</div>
-            `;
-
-            vAction.innerHTML = btnHtml;
-        }
-
-        window.doPunch = async function(type) {
-            vAction.innerHTML = `<button class="btn" style="background:var(--bg-input); color:var(--text-sec);" disabled>กำลังบันทึก...</button>`;
-            const now = new Date();
-            await addDoc(collection(db, "timeRecords"), {
-                empId: currentUser.id, empName: currentUser.name, type: type,
-                timestamp: now.toISOString(),
-                timeString: now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }),
-                dateString: now.toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' })
-            });
-            // Update UI automatically via listener
-        };
-
-        function viewEmpReq() {
-            vAction.classList.add('hide'); // ซ่อน Thumb Zone ให้ใช้ฟอร์มแบบเลื่อนได้
-            const myReqs = requests.filter(r => r.empId === currentUser.id);
-            let listHtml = myReqs.length ? myReqs.map(r => `
-                <div class="list-item">
-                    <div class="item-col">
-                        <span class="item-head">${r.reqType==='LEAVE' ? r.leaveType : 'สลับวันหยุด'}</span>
-                        <span class="item-sub">วันที่: ${r.date}</span>
-                    </div>
-                    ${formatStatus(r.status)}
-                </div>
-            `).join('') : '<div class="empty">ไม่มีประวัติคำขอ</div>';
-
-            let empOpts = employees.filter(e => e.id !== currentUser.id).map(e => `<option value="${e.id}">${e.name}</option>`).join('');
-
-            vMain.innerHTML = `
-                <h2 class="title" style="margin-top:1rem;">ส่งคำขอใหม่</h2>
-                
-                <div class="card" style="padding:1rem;">
-                    <div class="input-group">
-                        <span class="input-label">ประเภทคำขอ</span>
-                        <select id="reqSelect" class="input-el" onchange="toggleReqForm(this.value)">
-                            <option value="LEAVE">ลางาน</option>
-                            <option value="SWAP">สลับวันหยุด</option>
-                        </select>
-                    </div>
-
-                    <div id="form-leave">
-                        <div class="input-group">
-                            <select id="f-lType" class="input-el"><option value="ลาป่วย">ลาป่วย</option><option value="ลากิจ">ลากิจ</option><option value="พักร้อน">พักร้อน</option></select>
-                        </div>
-                        <div class="input-group"><input type="date" id="f-lDate" class="input-el"></div>
-                        <div class="input-group"><input type="text" id="f-lNote" class="input-el" placeholder="เหตุผลการลา"></div>
-                        <button class="btn btn-primary" onclick="submitReq('LEAVE')">ส่งคำขอลางาน</button>
-                    </div>
-
-                    <div id="form-swap" class="hide">
-                        <div class="input-group">
-                            <span class="input-label">สลับวันหยุดกับ</span>
-                            <select id="f-sEmp" class="input-el"><option value="" disabled selected>เลือกเพื่อนร่วมงาน</option>${empOpts}</select>
-                        </div>
-                        <div class="input-group">
-                            <span class="input-label">วันที่ต้องการให้มาแทน</span>
-                            <input type="date" id="f-sDate" class="input-el">
-                        </div>
-                        <button class="btn btn-primary" onclick="submitReq('SWAP')">ส่งคำขอสลับวัน</button>
-                    </div>
-                </div>
-
-                <h2 class="title" style="margin-top:1rem; font-size:1rem;">ประวัติคำขอ</h2>
-                <div class="list-wrap">${listHtml}</div>
-            `;
-        }
-
-        window.toggleReqForm = function(type) {
-            document.getElementById('form-leave').classList.toggle('hide', type !== 'LEAVE');
-            document.getElementById('form-swap').classList.toggle('hide', type !== 'SWAP');
-        }
-
-        window.submitReq = async function(type) {
-            const now = new Date().toISOString();
-            if(type === 'LEAVE') {
-                const lt = document.getElementById('f-lType').value, ld = document.getElementById('f-lDate').value, ln = document.getElementById('f-lNote').value;
-                if(!ld) return alert('กรุณาเลือกวันที่');
-                await addDoc(collection(db, "requests"), { empId: currentUser.id, empName: currentUser.name, reqType: 'LEAVE', leaveType: lt, date: ld, reason: ln, status: 'PENDING', timestamp: now });
-            } else {
-                const tid = document.getElementById('f-sEmp').value, sd = document.getElementById('f-sDate').value;
-                if(!tid || !sd) return alert('กรุณากรอกให้ครบ');
-                const tName = employees.find(e=>e.id===tid).name;
-                await addDoc(collection(db, "requests"), { empId: currentUser.id, empName: currentUser.name, reqType: 'SWAP', targetEmpId: tid, targetEmpName: tName, date: sd, status: 'PENDING', timestamp: now });
-            }
-            alert('ส่งคำขอเรียบร้อย');
-        }
-
-        // --- VIEWS: ADMIN ---
-        function viewAdDash() {
-            vAction.classList.add('hide');
-            const workCount = employees.filter(e => getEmpStatus(e.id) === 'IN').length;
-            const pendCount = requests.filter(r => r.status === 'PENDING').length;
-            
-            let recsHtml = records.slice(-5).reverse().map(r => `
-                <div class="list-item">
-                    <div class="item-col"><span class="item-head">${r.empName}</span><span class="item-sub">${r.dateString} ${r.timeString}</span></div>
-                    <span class="badge ${r.type==='IN'?'bg-in':'bg-out'}">${r.type==='IN'?'เข้า':'ออก'}</span>
-                </div>
-            `).join('');
-
-            vMain.innerHTML = `
-                <h2 class="title" style="margin-top:1rem;">ภาพรวมวันนี้</h2>
-                <div class="card-row">
-                    <div class="card-stat">
-                        <div style="font-size:2rem; font-weight:800; line-height:1;">${employees.length}</div>
-                        <div style="font-size:0.8rem; color:var(--text-sec); font-weight:600; margin-top:4px;">พนักงานรวม</div>
-                    </div>
-                    <div class="card-stat">
-                        <div style="font-size:2rem; font-weight:800; color:var(--success); line-height:1;">${workCount}</div>
-                        <div style="font-size:0.8rem; color:var(--text-sec); font-weight:600; margin-top:4px;">กำลังทำงาน</div>
-                    </div>
-                </div>
-                
-                <div class="card" style="display:flex; justify-content:space-between; align-items:center; cursor:pointer; padding:1rem 1.25rem;" onclick="nav('ad-req')">
-                    <div class="item-col">
-                        <span class="item-head">คำขอรอดำเนินการ</span>
-                        <span class="item-sub">แตะเพื่อจัดการ</span>
-                    </div>
-                    <div style="background:#fef3c7; color:#d97706; font-weight:800; padding:4px 12px; border-radius:12px;">${pendCount} รายการ</div>
-                </div>
-
-                <h2 class="title" style="font-size:1rem; margin-top:1rem;">ความเคลื่อนไหวล่าสุด</h2>
-                <div class="list-wrap">${recsHtml || '<div class="empty">ไม่มีความเคลื่อนไหว</div>'}</div>
-            `;
-        }
-
-        function viewAdEmp() {
-            vAction.classList.add('hide');
-            let empHtml = employees.map(e => `
-                <div class="list-item">
-                    <div class="item-col"><span class="item-head">${e.name}</span><span class="item-sub">PIN: ${e.pin}</span></div>
-                    <button class="btn-ghost" style="color:var(--danger); font-weight:700;" onclick="delEmp('${e.id}')">ลบ</button>
-                </div>
-            `).join('');
-
-            vMain.innerHTML = `
-                <h2 class="title" style="margin-top:1rem;">เพิ่มพนักงาน</h2>
-                <div class="card" style="padding:1rem;">
-                    <div class="card-row" style="margin-bottom:0.75rem;">
-                        <input type="text" id="a-eName" class="input-el" style="flex:2;" placeholder="ชื่อพนักงาน">
-                        <input type="password" id="a-ePin" class="input-el" style="flex:1; text-align:center;" placeholder="PIN" maxlength="4" inputmode="numeric">
-                    </div>
-                    <button class="btn btn-primary" onclick="addEmp()">บันทึกข้อมูล</button>
-                </div>
-                <h2 class="title" style="font-size:1rem; margin-top:1rem;">รายชื่อพนักงาน</h2>
-                <div class="list-wrap">${empHtml || '<div class="empty">ไม่มีข้อมูลพนักงาน</div>'}</div>
-            `;
-        }
-
-        window.addEmp = async function() {
-            const n = document.getElementById('a-eName').value.trim(), p = document.getElementById('a-ePin').value;
-            if(!n || p.length !== 4) return alert('กรุณากรอกชื่อ และ PIN 4 หลัก');
-            if(p === adminPin || employees.some(e=>e.pin===p)) return alert('PIN ซ้ำในระบบ');
-            await addDoc(collection(db, "employees"), { name: n, pin: p });
-            alert('เพิ่มสำเร็จ');
-        }
-        window.delEmp = async function(id) { if(confirm('ยืนยันลบพนักงาน?')) await deleteDoc(doc(db, "employees", id)); }
-
-        function viewAdReq() {
-            vAction.classList.add('hide');
-            let reqHtml = requests.map(r => `
-                <div class="card" style="padding:1rem;">
-                    <div style="display:flex; justify-content:space-between; margin-bottom:12px;">
-                        <div class="item-col">
-                            <span class="item-head">${r.empName}</span>
-                            <span class="item-sub" style="color:var(--text-main); font-weight:600;">
-                                ${r.reqType==='LEAVE' ? `ลา: ${r.leaveType} (${r.date})` : `สลับกับ: ${r.targetEmpName} (${r.date})`}
-                            </span>
-                            ${r.reason ? `<span class="item-sub" style="font-style:italic;">"${r.reason}"</span>` : ''}
-                        </div>
-                        ${formatStatus(r.status)}
-                    </div>
-                    ${r.status === 'PENDING' ? `
-                    <div class="card-row" style="margin-bottom:0;">
-                        <button class="btn btn-outline" style="border-color:var(--danger); color:var(--danger);" onclick="updReq('${r.id}', 'REJECTED')">ปฏิเสธ</button>
-                        <button class="btn btn-primary" onclick="updReq('${r.id}', 'APPROVED')">อนุมัติ</button>
-                    </div>` : ''}
-                </div>
-            `).join('');
-
-            vMain.innerHTML = `
-                <h2 class="title" style="margin-top:1rem;">จัดการคำขอ</h2>
-                <div class="list-wrap">${reqHtml || '<div class="empty">ไม่มีคำขอในระบบ</div>'}</div>
-            `;
-        }
-        window.updReq = async function(id, status) { await updateDoc(doc(db, "requests", id), {status: status}); }
-
-        window.logout = function() {
-            sessionStorage.removeItem('currentUser'); currentUser = null;
-            updateLayout(); nav('login');
-        };
-
-        // --- Router ---
-        window.nav = function(page) {
-            if (!adminPin && page !== 'setup') page = 'setup';
-            else if (adminPin && !currentUser && page !== 'login') page = 'login';
-            
-            // Role Guard
-            if (currentUser) {
-                if (currentUser.role === 'admin' && page.startsWith('em-')) page = 'ad-dash';
-                if (currentUser.role === 'emp' && page.startsWith('ad-')) page = 'em-dash';
-            }
-
-            // Update Tabs
-            document.querySelectorAll('.nav-tab').forEach(el => el.classList.remove('active'));
-            const tab = document.getElementById(`tab-${page}`);
-            if(tab) tab.classList.add('active');
-
-            window.location.hash = page;
-            vMain.scrollTop = 0;
-
-            if (page === 'setup') viewSetup();
-            else if (page === 'login') viewLogin();
-            else if (page === 'ad-dash') viewAdDash();
-            else if (page === 'ad-emp') viewAdEmp();
-            else if (page === 'ad-req') viewAdReq();
-            else if (page === 'em-dash') viewEmpDash();
-            else if (page === 'em-req') viewEmpReq();
-        };
-
-        function route() {
-            if(!isReady) return;
-            let page = window.location.hash.replace('#', '') || (adminPin ? (currentUser ? (currentUser.role==='admin'?'ad-dash':'em-dash') : 'login') : 'setup');
-            nav(page);
-        }
-        window.addEventListener('hashchange', route);
-
-    </script>
-</body>
-</html>
+    </div>
+  );
+}
