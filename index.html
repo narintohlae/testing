@@ -20,6 +20,12 @@
             -ms-overflow-style: none;
             scrollbar-width: none;
         }
+        /* ซ่อนลูกศรใน input type number */
+        input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-outer-spin-button { 
+            -webkit-appearance: none; 
+            margin: 0; 
+        }
     </style>
 </head>
 <body class="flex justify-center min-h-screen text-gray-800">
@@ -52,31 +58,36 @@
 
         <!-- Login Screen -->
         <main id="loginScreen" class="flex-1 overflow-y-auto no-scrollbar p-6 relative z-0 flex flex-col justify-center">
-            <div class="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
+            <div class="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm relative overflow-hidden">
+                <!-- Badge for Admin Mode -->
+                <div id="adminBadge" class="hidden absolute top-0 right-0 bg-purple-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-lg">
+                    โหมดผู้ดูแลระบบ
+                </div>
+
                 <h2 class="text-2xl font-bold text-gray-800 mb-2 text-center" id="authTitle">เข้าสู่ระบบ</h2>
-                <p class="text-sm text-gray-500 text-center mb-6" id="authSubtitle">กรุณาเข้าสู่ระบบเพื่อลงเวลาทำงาน</p>
+                <p class="text-sm text-gray-500 text-center mb-6" id="authSubtitle">กรุณาระบุรหัสพนักงานและ PIN</p>
 
                 <form id="authForm" class="space-y-4" onsubmit="return false;">
                     <div id="nameField" class="hidden">
-                        <label class="block text-sm font-medium text-gray-700 mb-1">ชื่อ-นามสกุล</label>
-                        <input type="text" id="regName" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition" placeholder="ชื่อสำหรับแสดงในระบบ">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">ชื่อ-นามสกุลพนักงาน</label>
+                        <input type="text" id="regName" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition" placeholder="เช่น สมชาย ใจดี">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">อีเมล</label>
-                        <input type="email" id="authEmail" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition" placeholder="อีเมลของคุณ">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">รหัสพนักงาน</label>
+                        <input type="text" id="authEmpId" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition uppercase" placeholder="เช่น EMP001">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">รหัสผ่าน</label>
-                        <input type="password" id="authPassword" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition" placeholder="รหัสผ่านอย่างน้อย 6 ตัว">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">รหัส PIN (6 หลัก)</label>
+                        <input type="password" id="authPin" inputmode="numeric" pattern="[0-9]*" maxlength="6" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition text-center tracking-[0.5em] text-lg font-mono" placeholder="••••••">
                     </div>
                     <button id="authSubmitBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl transition shadow-md mt-2">
                         เข้าสู่ระบบ
                     </button>
                 </form>
 
-                <div class="mt-6 text-center text-sm text-gray-600">
-                    <span id="authToggleText">ยังไม่มีบัญชีใช่หรือไม่?</span>
-                    <button id="authToggleBtn" class="text-blue-600 font-semibold hover:underline ml-1">ลงทะเบียน</button>
+                <div class="mt-6 text-center text-sm text-gray-600 border-t border-gray-100 pt-4">
+                    <span id="authToggleText">สำหรับผู้ดูแลระบบ:</span>
+                    <button id="authToggleBtn" class="text-purple-600 font-semibold hover:underline ml-1">เพิ่มพนักงานใหม่</button>
                 </div>
             </div>
         </main>
@@ -96,8 +107,8 @@
                 </div>
             </div>
 
-            <div class="mb-8 bg-gray-50 p-4 rounded-2xl border border-gray-100 shadow-sm">
-                <label class="block text-sm font-medium text-gray-600 mb-2" for="remark">หมายเหตุ (ถ้ามี)</label>
+            <div class="mb-6 bg-gray-50 p-4 rounded-2xl border border-gray-100 shadow-sm">
+                <label class="block text-sm font-medium text-gray-600 mb-2" for="remark">หมายเหตุเวลาเข้า-ออก (ถ้ามี)</label>
                 <div class="relative">
                     <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <i data-lucide="file-text" class="w-5 h-5 text-gray-400"></i>
@@ -106,7 +117,8 @@
                 </div>
             </div>
 
-            <div class="grid grid-cols-2 gap-4 mb-8">
+            <!-- Action Buttons: Clock In / Clock Out -->
+            <div class="grid grid-cols-2 gap-4 mb-4">
                 <button id="btnClockIn" class="flex flex-col items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white py-6 rounded-2xl shadow-md shadow-green-200 transition transform active:scale-95">
                     <div class="bg-white/20 p-3 rounded-full">
                         <i data-lucide="log-in" class="w-8 h-8"></i>
@@ -122,12 +134,33 @@
                 </button>
             </div>
 
+            <!-- Action Buttons: Extra Features -->
+            <div class="grid grid-cols-2 gap-4 mb-8">
+                <button id="btnOpenLeave" class="flex items-center justify-center gap-2 bg-purple-50 hover:bg-purple-100 text-purple-700 py-3 rounded-xl border border-purple-200 transition transform active:scale-95">
+                    <i data-lucide="calendar-off" class="w-5 h-5"></i>
+                    <span class="font-medium text-sm">แจ้งลางาน</span>
+                </button>
+                
+                <button id="btnOpenSwap" class="flex items-center justify-center gap-2 bg-orange-50 hover:bg-orange-100 text-orange-700 py-3 rounded-xl border border-orange-200 transition transform active:scale-95">
+                    <i data-lucide="arrow-right-left" class="w-5 h-5"></i>
+                    <span class="font-medium text-sm">สลับวันหยุด</span>
+                </button>
+            </div>
+
+            <!-- History Tabs -->
             <div>
-                <h2 class="text-lg font-semibold text-gray-700 mb-4 flex items-center gap-2">
-                    <i data-lucide="history" class="w-5 h-5"></i>
-                    ประวัติของวันนี้
-                </h2>
+                <div class="flex border-b border-gray-200 mb-4">
+                    <button id="tabTimeLog" class="flex-1 py-3 text-sm font-semibold text-blue-600 border-b-2 border-blue-600 transition">ประวัติของวันนี้</button>
+                    <button id="tabRequest" class="flex-1 py-3 text-sm font-semibold text-gray-400 border-b-2 border-transparent transition hover:text-gray-600">สถานะคำขอ</button>
+                </div>
+
+                <!-- Tab Content: Time Logs -->
                 <div id="historyList" class="space-y-3">
+                    <div class="text-center text-gray-400 py-4 text-sm">กำลังเชื่อมต่อข้อมูล...</div>
+                </div>
+
+                <!-- Tab Content: Requests -->
+                <div id="requestList" class="space-y-3 hidden">
                     <div class="text-center text-gray-400 py-4 text-sm">กำลังเชื่อมต่อข้อมูล...</div>
                 </div>
             </div>
@@ -139,6 +172,72 @@
             <i data-lucide="loader-2" class="w-10 h-10 text-blue-500 animate-spin mb-4"></i>
             <p class="text-gray-600 font-medium">กำลังประมวลผล...</p>
         </div>
+
+        <!-- LEAVE MODAL OVERLAY -->
+        <div id="leaveModal" class="fixed inset-0 z-40 bg-white flex flex-col transform translate-y-full transition-transform duration-300">
+            <header class="bg-purple-600 text-white p-4 flex justify-between items-center shadow-md">
+                <h2 class="text-lg font-semibold flex items-center gap-2"><i data-lucide="calendar-off" class="w-5 h-5"></i> แบบฟอร์มลางาน</h2>
+                <button id="btnCloseLeave" class="p-1 hover:bg-purple-500 rounded-full"><i data-lucide="x" class="w-6 h-6"></i></button>
+            </header>
+            <main class="flex-1 p-6 overflow-y-auto no-scrollbar">
+                <form id="leaveForm" class="space-y-4" onsubmit="return false;">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">ประเภทการลา</label>
+                        <select id="leaveType" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-purple-500 focus:border-purple-500 bg-white">
+                            <option value="ลาป่วย">ลาป่วย</option>
+                            <option value="ลากิจ">ลากิจ</option>
+                            <option value="ลาพักร้อน">ลาพักร้อน</option>
+                            <option value="อื่นๆ">อื่นๆ</option>
+                        </select>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">ตั้งแต่วันที่</label>
+                            <input type="date" id="leaveStartDate" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-purple-500 focus:border-purple-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">ถึงวันที่</label>
+                            <input type="date" id="leaveEndDate" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-purple-500 focus:border-purple-500">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">เหตุผลการลา</label>
+                        <textarea id="leaveReason" rows="3" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-purple-500 focus:border-purple-500 placeholder-gray-400" placeholder="ระบุเหตุผล..."></textarea>
+                    </div>
+                    <button id="submitLeaveBtn" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 rounded-xl transition shadow-md mt-6">
+                        ส่งคำขอลางาน
+                    </button>
+                </form>
+            </main>
+        </div>
+
+        <!-- SWAP SHIFT MODAL OVERLAY -->
+        <div id="swapModal" class="fixed inset-0 z-40 bg-white flex flex-col transform translate-y-full transition-transform duration-300">
+            <header class="bg-orange-500 text-white p-4 flex justify-between items-center shadow-md">
+                <h2 class="text-lg font-semibold flex items-center gap-2"><i data-lucide="arrow-right-left" class="w-5 h-5"></i> แบบฟอร์มสลับวันหยุด</h2>
+                <button id="btnCloseSwap" class="p-1 hover:bg-orange-400 rounded-full"><i data-lucide="x" class="w-6 h-6"></i></button>
+            </header>
+            <main class="flex-1 p-6 overflow-y-auto no-scrollbar">
+                <form id="swapForm" class="space-y-4" onsubmit="return false;">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">วันหยุดเดิมของคุณ</label>
+                        <input type="date" id="swapOriginalDate" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-orange-500 focus:border-orange-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">วันที่ต้องการขอหยุดแทน</label>
+                        <input type="date" id="swapNewDate" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-orange-500 focus:border-orange-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">เหตุผลในการสลับวันหยุด</label>
+                        <textarea id="swapReason" rows="3" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-orange-500 focus:border-orange-500 placeholder-gray-400" placeholder="ระบุเหตุผล..."></textarea>
+                    </div>
+                    <button id="submitSwapBtn" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 rounded-xl transition shadow-md mt-6">
+                        ส่งคำขอสลับวันหยุด
+                    </button>
+                </form>
+            </main>
+        </div>
+
     </div>
 
     <!-- Custom Modal -->
@@ -164,7 +263,7 @@
         import { getFirestore, collection, addDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // ==========================================
-        // 1. CONFIGURATION (ใช้ Config ของ User 100%)
+        // 1. CONFIGURATION
         // ==========================================
         const firebaseConfig = {
             apiKey: "AIzaSyBHuZGyY1F3v4rCrhrpt9YB90C0Ahh-stE",
@@ -176,7 +275,6 @@
             measurementId: "G-50SYJKTRT1"
         };
         
-        // URL ของ Google Apps Script Web App สำหรับส่งเข้า Google Sheets
         const GOOGLE_SHEETS_WEBHOOK_URL = ""; 
         
         // ==========================================
@@ -186,11 +284,12 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        // ใช้ Path มาตรฐานสำหรับฐานข้อมูลของคุณโดยตรง
         const collectionPath = 'timelogs'; 
+        const requestPath = 'requests'; 
 
         let currentUser = null;
         let allLogs = [];
+        let allRequests = [];
 
         lucide.createIcons();
 
@@ -201,6 +300,7 @@
         const dateDisplay = document.getElementById('currentDate');
         const remarkInput = document.getElementById('remark');
         const historyList = document.getElementById('historyList');
+        const requestList = document.getElementById('requestList');
         const loadingOverlay = document.getElementById('loadingOverlay');
         
         const loginScreen = document.getElementById('loginScreen');
@@ -210,17 +310,52 @@
         const userGreeting = document.getElementById('userGreeting');
         const loggedInUserName = document.getElementById('loggedInUserName');
         
+        // Auth UI
         const authTitle = document.getElementById('authTitle');
         const authSubtitle = document.getElementById('authSubtitle');
         const nameField = document.getElementById('nameField');
         const regName = document.getElementById('regName');
-        const authEmail = document.getElementById('authEmail');
-        const authPassword = document.getElementById('authPassword');
+        const authEmpId = document.getElementById('authEmpId');
+        const authPin = document.getElementById('authPin');
         const authSubmitBtn = document.getElementById('authSubmitBtn');
         const authToggleText = document.getElementById('authToggleText');
         const authToggleBtn = document.getElementById('authToggleBtn');
+        const adminBadge = document.getElementById('adminBadge');
+
+        // Tab UI
+        const tabTimeLog = document.getElementById('tabTimeLog');
+        const tabRequest = document.getElementById('tabRequest');
+
+        // Feature UI
+        const leaveModal = document.getElementById('leaveModal');
+        const swapModal = document.getElementById('swapModal');
+        const btnOpenLeave = document.getElementById('btnOpenLeave');
+        const btnOpenSwap = document.getElementById('btnOpenSwap');
+        const btnCloseLeave = document.getElementById('btnCloseLeave');
+        const btnCloseSwap = document.getElementById('btnCloseSwap');
         
         let isLoginMode = true;
+
+        // Tabs Logic
+        tabTimeLog.addEventListener('click', () => {
+            tabTimeLog.className = 'flex-1 py-3 text-sm font-semibold text-blue-600 border-b-2 border-blue-600 transition';
+            tabRequest.className = 'flex-1 py-3 text-sm font-semibold text-gray-400 border-b-2 border-transparent transition hover:text-gray-600';
+            historyList.classList.remove('hidden');
+            requestList.classList.add('hidden');
+        });
+
+        tabRequest.addEventListener('click', () => {
+            tabRequest.className = 'flex-1 py-3 text-sm font-semibold text-blue-600 border-b-2 border-blue-600 transition';
+            tabTimeLog.className = 'flex-1 py-3 text-sm font-semibold text-gray-400 border-b-2 border-transparent transition hover:text-gray-600';
+            requestList.classList.remove('hidden');
+            historyList.classList.add('hidden');
+        });
+
+        // Modals Logic
+        btnOpenLeave.addEventListener('click', () => leaveModal.classList.remove('translate-y-full'));
+        btnCloseLeave.addEventListener('click', () => leaveModal.classList.add('translate-y-full'));
+        btnOpenSwap.addEventListener('click', () => swapModal.classList.remove('translate-y-full'));
+        btnCloseSwap.addEventListener('click', () => swapModal.classList.add('translate-y-full'));
 
         function updateClock() {
             const now = new Date();
@@ -261,19 +396,23 @@
             modalContent.classList.add('scale-95');
         });
 
+        // ------------------------------------------
+        // RENDER DATA FUNCTIONS
+        // ------------------------------------------
         function renderHistory(data) {
             historyList.innerHTML = '';
-            
             const todayStr = new Date().toLocaleDateString('th-TH');
-            let todayLogs = data.filter(log => log.date === todayStr);
-            todayLogs.sort((a, b) => b.timestamp - a.timestamp);
+            
+            // กรองข้อมูลเฉพาะของคนที่ล็อกอิน และเป็นของวันนี้
+            let myTodayLogs = data.filter(log => log.uid === currentUser?.uid && log.date === todayStr);
+            myTodayLogs.sort((a, b) => b.timestamp - a.timestamp);
 
-            if (todayLogs.length === 0) {
+            if (myTodayLogs.length === 0) {
                 historyList.innerHTML = `<div class="text-center text-gray-400 py-4 text-sm bg-gray-50 rounded-xl border border-dashed border-gray-200">ไม่มีประวัติการลงเวลาในวันนี้</div>`;
                 return;
             }
 
-            todayLogs.forEach(log => {
+            myTodayLogs.forEach(log => {
                 const isClockIn = log.type === 'IN';
                 const iconColor = isClockIn ? 'text-green-500' : 'text-rose-500';
                 const bgColor = isClockIn ? 'bg-green-50' : 'bg-rose-50';
@@ -281,12 +420,8 @@
                 const typeText = isClockIn ? 'เข้างาน' : 'ออกงาน';
 
                 let extraInfoHtml = '';
-                if (log.remark) {
-                    extraInfoHtml += `<p class="text-xs text-gray-500 mt-1"><i data-lucide="file-text" class="w-3 h-3 inline"></i> ${log.remark}</p>`;
-                }
-                if (log.location) {
-                    extraInfoHtml += `<a href="https://maps.google.com/?q=${log.location.lat},${log.location.lng}" target="_blank" class="text-xs text-blue-500 hover:underline mt-1 flex items-center gap-1"><i data-lucide="map-pin" class="w-3 h-3"></i> ดูพิกัดบนแผนที่</a>`;
-                }
+                if (log.remark) extraInfoHtml += `<p class="text-xs text-gray-500 mt-1"><i data-lucide="file-text" class="w-3 h-3 inline"></i> ${log.remark}</p>`;
+                if (log.location) extraInfoHtml += `<a href="https://maps.google.com/?q=${log.location.lat},${log.location.lng}" target="_blank" class="text-xs text-blue-500 hover:underline mt-1 flex items-center gap-1"><i data-lucide="map-pin" class="w-3 h-3"></i> ดูพิกัดแผนที่</a>`;
 
                 const logEl = document.createElement('div');
                 logEl.className = 'flex items-center justify-between p-3 bg-white border border-gray-100 rounded-xl shadow-sm';
@@ -301,15 +436,64 @@
                             ${extraInfoHtml}
                         </div>
                     </div>
-                    <div class="text-right">
-                        <p class="font-semibold text-gray-900">${log.time}</p>
-                    </div>
+                    <div class="text-right"><p class="font-semibold text-gray-900">${log.time}</p></div>
                 `;
                 historyList.appendChild(logEl);
             });
             lucide.createIcons();
         }
 
+        function renderRequests(data) {
+            requestList.innerHTML = '';
+            
+            // กรองคำขอเฉพาะของพนักงานคนนี้
+            let myRequests = data.filter(req => req.uid === currentUser?.uid);
+            myRequests.sort((a, b) => b.timestamp - a.timestamp); // ล่าสุดขึ้นก่อน
+
+            if (myRequests.length === 0) {
+                requestList.innerHTML = `<div class="text-center text-gray-400 py-4 text-sm bg-gray-50 rounded-xl border border-dashed border-gray-200">ยังไม่มีรายการคำขอของคุณ</div>`;
+                return;
+            }
+
+            myRequests.forEach(req => {
+                const isLeave = req.requestType === 'LEAVE';
+                const iconName = isLeave ? 'calendar-off' : 'arrow-right-left';
+                const titleText = isLeave ? `ลางาน (${req.leaveType})` : 'สลับวันหยุด';
+                const colorTheme = isLeave ? 'purple' : 'orange';
+                
+                const formatD = (d) => new Date(d).toLocaleDateString('th-TH', { day:'numeric', month:'short' });
+                const detailText = isLeave 
+                    ? `${formatD(req.startDate)} - ${formatD(req.endDate)}` 
+                    : `จาก ${formatD(req.originalDate)} เป็น ${formatD(req.requestedDate)}`;
+
+                let statusHtml = '';
+                if (req.status === 'PENDING') statusHtml = `<span class="px-2 py-1 bg-yellow-100 text-yellow-700 text-[10px] rounded-full font-medium">รออนุมัติ</span>`;
+                else if (req.status === 'APPROVED') statusHtml = `<span class="px-2 py-1 bg-green-100 text-green-700 text-[10px] rounded-full font-medium">อนุมัติแล้ว</span>`;
+                else if (req.status === 'REJECTED') statusHtml = `<span class="px-2 py-1 bg-red-100 text-red-700 text-[10px] rounded-full font-medium">ไม่อนุมัติ</span>`;
+
+                const el = document.createElement('div');
+                el.className = 'p-3 bg-white border border-gray-100 rounded-xl shadow-sm';
+                el.innerHTML = `
+                    <div class="flex justify-between items-start mb-2">
+                        <div class="flex items-center gap-2">
+                            <div class="p-1.5 rounded-md bg-${colorTheme}-50 text-${colorTheme}-600">
+                                <i data-lucide="${iconName}" class="w-4 h-4"></i>
+                            </div>
+                            <span class="font-medium text-gray-800 text-sm">${titleText}</span>
+                        </div>
+                        ${statusHtml}
+                    </div>
+                    <p class="text-xs text-gray-600 mb-1"><i data-lucide="clock" class="w-3 h-3 inline"></i> วันที่: ${detailText}</p>
+                    <p class="text-xs text-gray-500 italic">"${req.reason}"</p>
+                `;
+                requestList.appendChild(el);
+            });
+            lucide.createIcons();
+        }
+
+        // ------------------------------------------
+        // ACTIONS & DB FUNCTIONS
+        // ------------------------------------------
         async function syncToGoogleSheets(logData) {
             if (!GOOGLE_SHEETS_WEBHOOK_URL) return;
             try {
@@ -319,33 +503,23 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(logData)
                 });
-            } catch (err) {
-                console.error("Error syncing to sheets:", err);
-            }
+            } catch (err) { console.error("Error syncing to sheets:", err); }
         }
 
         async function handleClockEvent(type) {
             const remark = remarkInput.value.trim();
-            
-            if (!currentUser) {
-                showModal('ข้อผิดพลาด', 'ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่', 'error');
-                return;
-            }
+            if (!currentUser) { showModal('ข้อผิดพลาด', 'ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่', 'error'); return; }
 
-            const empName = currentUser.displayName || currentUser.email;
+            const empName = currentUser.displayName || currentUser.email.split('@')[0];
             loadingOverlay.classList.remove('hidden');
             
             let locationData = null;
             try {
                 if (navigator.geolocation) {
-                    const position = await new Promise((resolve, reject) => {
-                        navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000, enableHighAccuracy: true });
-                    });
+                    const position = await new Promise((resolve, reject) => { navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000, enableHighAccuracy: true }); });
                     locationData = { lat: position.coords.latitude, lng: position.coords.longitude };
                 }
-            } catch (geoError) {
-                console.warn("ไม่สามารถดึงตำแหน่ง GPS ได้:", geoError);
-            }
+            } catch (geoError) {}
             
             try {
                 const now = new Date();
@@ -361,131 +535,192 @@
                     isoString: now.toISOString()
                 };
 
-                const colRef = collection(db, collectionPath);
-                await addDoc(colRef, logData);
-
+                await addDoc(collection(db, collectionPath), logData);
                 syncToGoogleSheets(logData);
                 remarkInput.value = '';
-
                 loadingOverlay.classList.add('hidden');
-                const typeTxt = type === 'IN' ? 'เข้างาน' : 'ออกงาน';
-                showModal('สำเร็จ', `ลงเวลา${typeTxt}เรียบร้อยแล้วเวลา ${logData.time} น.`, 'success');
-
+                showModal('สำเร็จ', `ลงเวลา${type === 'IN' ? 'เข้างาน' : 'ออกงาน'}เรียบร้อยแล้วเวลา ${logData.time} น.`, 'success');
             } catch (error) {
-                console.error("Error adding document: ", error);
                 loadingOverlay.classList.add('hidden');
-                
-                if (error.code === 'permission-denied' || error.message.includes('Missing or insufficient permissions')) {
-                    showModal('สิทธิ์การเข้าถึงถูกปฏิเสธ', 'ไม่สามารถบันทึกได้ กรุณาตรวจสอบ Firestore Rules ของคุณอีกครั้งว่าบันทึกและ Publish เรียบร้อยแล้ว (allow read, write: if request.auth != null;)', 'error');
-                } else {
-                    showModal('ข้อผิดพลาด', 'ไม่สามารถบันทึกข้อมูลได้ กรุณาลองใหม่', 'error');
-                }
+                if (error.code === 'permission-denied') showModal('สิทธิ์การเข้าถึงถูกปฏิเสธ', 'กรุณาตรวจสอบ Firestore Rules', 'error');
+                else showModal('ข้อผิดพลาด', 'ไม่สามารถบันทึกข้อมูลได้ กรุณาลองใหม่', 'error');
             }
         }
+
+        document.getElementById('submitLeaveBtn').addEventListener('click', async () => {
+            const leaveType = document.getElementById('leaveType').value;
+            const startDate = document.getElementById('leaveStartDate').value;
+            const endDate = document.getElementById('leaveEndDate').value;
+            const reason = document.getElementById('leaveReason').value.trim();
+
+            if(!startDate || !endDate || !reason) { showModal('แจ้งเตือน', 'กรุณากรอกวันที่และเหตุผลให้ครบถ้วน', 'error'); return; }
+            if (new Date(startDate) > new Date(endDate)) { showModal('แจ้งเตือน', 'วันที่สิ้นสุดต้องไม่ก่อนวันที่เริ่มต้น', 'error'); return; }
+
+            loadingOverlay.classList.remove('hidden');
+            try {
+                await addDoc(collection(db, requestPath), {
+                    uid: currentUser.uid,
+                    empName: currentUser.displayName || currentUser.email.split('@')[0],
+                    requestType: 'LEAVE',
+                    leaveType: leaveType,
+                    startDate: startDate,
+                    endDate: endDate,
+                    reason: reason,
+                    status: 'PENDING',
+                    timestamp: Date.now()
+                });
+                
+                loadingOverlay.classList.add('hidden');
+                leaveModal.classList.add('translate-y-full'); 
+                document.getElementById('leaveForm').reset(); 
+                tabRequest.click(); 
+                showModal('สำเร็จ', 'ส่งคำขอลางานเรียบร้อยแล้ว กรุณารอการอนุมัติ', 'success');
+            } catch(e) {
+                loadingOverlay.classList.add('hidden');
+                showModal('ข้อผิดพลาด', 'ไม่สามารถส่งคำขอได้ กรุณาลองใหม่', 'error');
+            }
+        });
+
+        document.getElementById('submitSwapBtn').addEventListener('click', async () => {
+            const originalDate = document.getElementById('swapOriginalDate').value;
+            const newDate = document.getElementById('swapNewDate').value;
+            const reason = document.getElementById('swapReason').value.trim();
+
+            if(!originalDate || !newDate || !reason) { showModal('แจ้งเตือน', 'กรุณากรอกวันที่และเหตุผลให้ครบถ้วน', 'error'); return; }
+
+            loadingOverlay.classList.remove('hidden');
+            try {
+                await addDoc(collection(db, requestPath), {
+                    uid: currentUser.uid,
+                    empName: currentUser.displayName || currentUser.email.split('@')[0],
+                    requestType: 'SWAP',
+                    originalDate: originalDate,
+                    requestedDate: newDate,
+                    reason: reason,
+                    status: 'PENDING',
+                    timestamp: Date.now()
+                });
+                
+                loadingOverlay.classList.add('hidden');
+                swapModal.classList.add('translate-y-full'); 
+                document.getElementById('swapForm').reset(); 
+                tabRequest.click(); 
+                showModal('สำเร็จ', 'ส่งคำขอสลับวันหยุดเรียบร้อยแล้ว กรุณารอการอนุมัติ', 'success');
+            } catch(e) {
+                loadingOverlay.classList.add('hidden');
+                showModal('ข้อผิดพลาด', 'ไม่สามารถส่งคำขอได้ กรุณาลองใหม่', 'error');
+            }
+        });
 
         document.getElementById('btnClockIn').addEventListener('click', () => handleClockEvent('IN'));
         document.getElementById('btnClockOut').addEventListener('click', () => handleClockEvent('OUT'));
 
-        let unsubscribeSnapshot = null;
+        // ------------------------------------------
+        // LISTENERS & AUTH (EMP_ID + PIN System)
+        // ------------------------------------------
+        let unsubLogs = null;
+        let unsubRequests = null;
 
-        function fetchLogs() {
+        function startDataListeners() {
             if (!currentUser) return;
-            const colRef = collection(db, collectionPath);
             
-            if(unsubscribeSnapshot) unsubscribeSnapshot();
-
-            unsubscribeSnapshot = onSnapshot(colRef, (snapshot) => {
+            unsubLogs = onSnapshot(collection(db, collectionPath), (snapshot) => {
                 allLogs = [];
-                snapshot.forEach((doc) => {
-                    allLogs.push({ id: doc.id, ...doc.data() });
-                });
+                snapshot.forEach((doc) => allLogs.push({ id: doc.id, ...doc.data() }));
                 renderHistory(allLogs);
-            }, (error) => {
-                console.error("Error fetching logs:", error);
-                if (error.code === 'permission-denied' || error.message.includes('Missing or insufficient permissions')) {
-                    historyList.innerHTML = `<div class="text-center text-red-500 py-4 text-sm bg-red-50 rounded-xl border border-dashed border-red-200">ไม่สามารถโหลดข้อมูลได้: ติดปัญหาเรื่องสิทธิ์ Firestore Rules</div>`;
-                }
-            });
+            }, (error) => console.error("Error fetching logs:", error));
+
+            unsubRequests = onSnapshot(collection(db, requestPath), (snapshot) => {
+                allRequests = [];
+                snapshot.forEach((doc) => allRequests.push({ id: doc.id, ...doc.data() }));
+                renderRequests(allRequests);
+            }, (error) => console.error("Error fetching requests:", error));
         }
 
+        function stopDataListeners() {
+            if(unsubLogs) unsubLogs();
+            if(unsubRequests) unsubRequests();
+        }
+
+        // Toggle ระหว่างหน้า Login ปกติ กับ หน้า Add Employee (Admin)
         authToggleBtn.addEventListener('click', () => {
             isLoginMode = !isLoginMode;
             if (isLoginMode) {
                 authTitle.textContent = 'เข้าสู่ระบบ';
-                authSubtitle.textContent = 'กรุณาเข้าสู่ระบบเพื่อลงเวลาทำงาน';
+                authSubtitle.textContent = 'กรุณาระบุรหัสพนักงานและ PIN';
                 nameField.classList.add('hidden');
                 authSubmitBtn.textContent = 'เข้าสู่ระบบ';
-                authToggleText.textContent = 'ยังไม่มีบัญชีใช่หรือไม่?';
-                authToggleBtn.textContent = 'ลงทะเบียน';
+                authSubmitBtn.classList.replace('bg-purple-600', 'bg-blue-600');
+                authSubmitBtn.classList.replace('hover:bg-purple-700', 'hover:bg-blue-700');
+                authToggleText.textContent = 'สำหรับผู้ดูแลระบบ:';
+                authToggleBtn.textContent = 'เพิ่มพนักงานใหม่';
+                adminBadge.classList.add('hidden');
             } else {
-                authTitle.textContent = 'ลงทะเบียนพนักงาน';
-                authSubtitle.textContent = 'สร้างบัญชีใหม่สำหรับลงเวลา';
+                authTitle.textContent = 'เพิ่มพนักงานใหม่';
+                authSubtitle.textContent = 'สร้างรหัสและ PIN สำหรับพนักงาน';
                 nameField.classList.remove('hidden');
-                authSubmitBtn.textContent = 'สร้างบัญชี';
-                authToggleText.textContent = 'มีบัญชีอยู่แล้ว?';
-                authToggleBtn.textContent = 'เข้าสู่ระบบ';
+                authSubmitBtn.textContent = 'บันทึกพนักงาน';
+                authSubmitBtn.classList.replace('bg-blue-600', 'bg-purple-600');
+                authSubmitBtn.classList.replace('hover:bg-blue-700', 'hover:bg-purple-700');
+                authToggleText.textContent = 'กลับไปหน้า:';
+                authToggleBtn.textContent = 'เข้าสู่ระบบของพนักงาน';
+                adminBadge.classList.remove('hidden');
+            }
+        });
+
+        // จำกัดความยาว PIN ให้อยู่ที่ 6 หลัก
+        authPin.addEventListener('input', function() {
+            if (this.value.length > 6) {
+                this.value = this.value.slice(0, 6);
             }
         });
 
         authSubmitBtn.addEventListener('click', async () => {
-            const email = authEmail.value.trim();
-            const password = authPassword.value;
+            const rawEmpId = authEmpId.value.trim().toLowerCase();
+            const pin = authPin.value;
             const name = regName.value.trim();
 
-            if (!email || !password) {
-                showModal('แจ้งเตือน', 'กรุณากรอกอีเมลและรหัสผ่านให้ครบถ้วน', 'error');
-                return;
-            }
+            if (!rawEmpId || !pin) { showModal('แจ้งเตือน', 'กรุณากรอกข้อมูลให้ครบถ้วน', 'error'); return; }
+            if (pin.length < 6) { showModal('แจ้งเตือน', 'รหัส PIN ต้องมี 6 หลัก', 'error'); return; }
+
+            // แปลงรหัสพนักงานให้เป็น Email format เพื่อใช้กับ Firebase Auth
+            const mockEmail = `${rawEmpId}@timeapp.local`;
 
             loadingOverlay.classList.remove('hidden');
 
             try {
                 if (isLoginMode) {
-                    await signInWithEmailAndPassword(auth, email, password);
+                    // Login
+                    await signInWithEmailAndPassword(auth, mockEmail, pin);
                 } else {
-                    if (!name) {
-                        loadingOverlay.classList.add('hidden');
-                        showModal('แจ้งเตือน', 'กรุณากรอกชื่อ-นามสกุล', 'error');
-                        return;
-                    }
-                    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-                    await updateProfile(userCredential.user, { displayName: name });
+                    // Add Employee (Register)
+                    if (!name) { loadingOverlay.classList.add('hidden'); showModal('แจ้งเตือน', 'กรุณากรอกชื่อ-นามสกุลพนักงาน', 'error'); return; }
+                    const userCred = await createUserWithEmailAndPassword(auth, mockEmail, pin);
+                    await updateProfile(userCred.user, { displayName: name });
                     currentUser = auth.currentUser;
+                    showModal('เพิ่มพนักงานสำเร็จ', `สร้างรหัสพนักงาน ${rawEmpId.toUpperCase()} เรียบร้อยแล้ว`, 'success');
+                    
+                    // หลังจากแอดเสร็จ ให้กลับไปหน้าล็อกอินปกติ
+                    authToggleBtn.click();
                 }
                 
-                authEmail.value = '';
-                authPassword.value = '';
-                regName.value = '';
-                
+                authEmpId.value = ''; authPin.value = ''; regName.value = '';
             } catch (error) {
-                console.error("Auth error:", error);
-                let errorMsg = 'เกิดข้อผิดพลาดในการตรวจสอบสิทธิ์';
-                if (error.code === 'auth/invalid-credential' || error.code === 'auth/invalid-email' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
-                    errorMsg = 'อีเมลหรือรหัสผ่านไม่ถูกต้อง';
+                let errorMsg = error.message;
+                if (error.code.includes('invalid-credential') || error.code.includes('wrong-password') || error.code.includes('user-not-found')) {
+                    errorMsg = 'รหัสพนักงาน หรือ PIN ไม่ถูกต้อง';
                 } else if (error.code === 'auth/email-already-in-use') {
-                    errorMsg = 'อีเมลนี้ถูกใช้งานแล้ว';
-                } else if (error.code === 'auth/weak-password') {
-                    errorMsg = 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร';
-                } else if (error.code === 'auth/operation-not-allowed') {
-                    errorMsg = 'ยังไม่ได้เปิดใช้งาน Email/Password Auth กรุณาไปที่ Firebase Console ครับ';
-                } else if (error.code === 'auth/unauthorized-domain') {
-                    errorMsg = 'โดเมนนี้ยังไม่ได้รับอนุญาต กรุณาไปที่ Firebase Console -> Authentication -> Settings -> Authorized domains แล้วเพิ่มโดเมนของหน้านี้ลงไปครับ';
-                } else {
-                    errorMsg = error.message;
+                    errorMsg = 'รหัสพนักงานนี้ถูกใช้งานแล้ว';
                 }
                 showModal('ข้อผิดพลาด', errorMsg, 'error');
-            } finally {
-                loadingOverlay.classList.add('hidden');
-            }
+            } finally { loadingOverlay.classList.add('hidden'); }
         });
 
         logoutBtn.addEventListener('click', async () => {
             try {
+                stopDataListeners();
                 await signOut(auth);
-                if(unsubscribeSnapshot) unsubscribeSnapshot();
-            } catch (error) {
-                console.error("Logout error:", error);
-            }
+            } catch (error) { console.error("Logout error:", error); }
         });
 
         function updateUIState(user) {
@@ -496,7 +731,8 @@
                 logoutBtn.classList.remove('hidden');
                 userGreeting.classList.remove('hidden');
                 
-                const displayName = user.displayName || user.email;
+                // ใช้ DisplayName หรือ เอารหัสพนักงานมาโชว์ถ้ายอมให้ไม่มีชื่อ
+                const displayName = user.displayName || user.email.split('@')[0].toUpperCase();
                 userGreeting.textContent = `สวัสดี, ${displayName}`;
                 loggedInUserName.textContent = displayName;
             } else {
@@ -505,48 +741,52 @@
                 exportCsvBtn.classList.add('hidden');
                 logoutBtn.classList.add('hidden');
                 userGreeting.classList.add('hidden');
+                leaveModal.classList.add('translate-y-full');
+                swapModal.classList.add('translate-y-full');
             }
         }
 
         onAuthStateChanged(auth, (user) => {
             currentUser = user;
             updateUIState(user);
-
             if (user) {
-                fetchLogs();
+                startDataListeners();
             } else {
                 historyList.innerHTML = `<div class="text-center text-gray-400 py-4 text-sm bg-gray-50 rounded-xl border border-dashed border-gray-200">กรุณาเข้าสู่ระบบเพื่อดูประวัติ</div>`;
-                allLogs = [];
+                requestList.innerHTML = '';
+                allLogs = []; allRequests = [];
             }
         });
 
+        // ------------------------------------------
+        // EXPORT CSV
+        // ------------------------------------------
         document.getElementById('exportCsvBtn').addEventListener('click', () => {
-            if (allLogs.length === 0) {
-                showModal('แจ้งเตือน', 'ยังไม่มีข้อมูลสำหรับส่งออก', 'info');
-                return;
-            }
+            if (allLogs.length === 0 && allRequests.length === 0) { showModal('แจ้งเตือน', 'ยังไม่มีข้อมูลสำหรับส่งออก', 'info'); return; }
             
             let csvContent = "\uFEFF"; 
-            csvContent += "วันที่,เวลา,ประเภท,ชื่อพนักงาน,หมายเหตุ,ละติจูด,ลองจิจูด\n";
-            
-            const sortedLogs = [...allLogs].sort((a, b) => b.timestamp - a.timestamp);
-            sortedLogs.forEach(row => {
-                const typeStr = row.type === 'IN' ? 'เข้างาน' : 'ออกงาน';
-                const remarkStr = row.remark ? `"${row.remark}"` : "";
+            csvContent += "=== ประวัติลงเวลา ===\nวันที่,เวลา,ประเภท,ชื่อพนักงาน,หมายเหตุ,ละติจูด,ลองจิจูด\n";
+            allLogs.sort((a, b) => b.timestamp - a.timestamp).forEach(row => {
                 const lat = row.location ? row.location.lat : "";
                 const lng = row.location ? row.location.lng : "";
-                csvContent += `${row.date},${row.time},${typeStr},"${row.empName}",${remarkStr},${lat},${lng}\n`;
+                csvContent += `${row.date},${row.time},${row.type === 'IN'?'เข้างาน':'ออกงาน'},"${row.empName}",${row.remark?`"${row.remark}"`:""},${lat},${lng}\n`;
+            });
+
+            csvContent += "\n=== ประวัติคำขอลางาน/สลับวันหยุด ===\nประเภท,ชื่อพนักงาน,สถานะ,เหตุผล,รายละเอียดเพิ่มเติม\n";
+            allRequests.sort((a, b) => b.timestamp - a.timestamp).forEach(req => {
+                let statusTh = req.status === 'PENDING' ? 'รออนุมัติ' : req.status === 'APPROVED' ? 'อนุมัติแล้ว' : 'ไม่อนุมัติ';
+                let details = req.requestType === 'LEAVE' 
+                    ? `ลา${req.leaveType} (${req.startDate} ถึง ${req.endDate})` 
+                    : `สลับหยุด (จาก ${req.originalDate} เป็น ${req.requestedDate})`;
+                csvContent += `${req.requestType === 'LEAVE' ? 'ลางาน' : 'สลับหยุด'},"${req.empName}",${statusTh},"${req.reason}","${details}"\n`;
             });
             
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
             const link = document.createElement("a");
             link.setAttribute("href", url);
-            link.setAttribute("download", `บันทึกเวลาพนักงาน_${new Date().toLocaleDateString('th-TH')}.csv`);
-            link.style.visibility = 'hidden';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+            link.setAttribute("download", `ข้อมูลพนักงาน_${new Date().toLocaleDateString('th-TH')}.csv`);
+            document.body.appendChild(link); link.click(); document.body.removeChild(link);
         });
 
     </script>
