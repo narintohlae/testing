@@ -8,22 +8,25 @@
     <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;600;700;800&family=Sarabun:wght@300;400;500;600&display=swap" rel="stylesheet">
     <style>
         :root { --app-bg: #f4f5f9; }
+        /* ปรับพื้นหลังให้ดูเป็นแอปที่ลอยอยู่ตรงกลางบนจอ iPad */
         body { 
             font-family: 'Sarabun', sans-serif; 
-            background-color: var(--app-bg); 
+            background-color: #e2e8f0; 
             -webkit-tap-highlight-color: transparent;
             height: 100dvh; 
-            height: -webkit-fill-available;
             overflow: hidden; 
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
-        html { height: -webkit-fill-available; }
+        
         h1, h2, h3, .font-heading { font-family: 'Prompt', sans-serif; }
         
-        .spinner { border: 3px solid rgba(0,0,0,0.1); border-left-color: currentColor; border-radius: 50%; width: 18px; height: 18px; animation: spin 0.8s cubic-bezier(0.5, 0, 0.5, 1) infinite; display: inline-block; }
+        .spinner { border: 3px solid rgba(255,255,255,0.2); border-left-color: #ffffff; border-radius: 50%; width: 20px; height: 20px; animation: spin 0.8s cubic-bezier(0.5, 0, 0.5, 1) infinite; display: inline-block; }
         .spinner-small { border: 2px solid rgba(59, 130, 246, 0.2); border-left-color: #3b82f6; border-radius: 50%; width: 14px; height: 14px; animation: spin 0.8s linear infinite; display: inline-block; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         
-        .custom-scroll::-webkit-scrollbar { width: 4px; }
+        .custom-scroll::-webkit-scrollbar { width: 6px; }
         .custom-scroll::-webkit-scrollbar-track { background: transparent; }
         .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -31,94 +34,89 @@
 
         .toast-enter { animation: slideUp 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
         @keyframes slideUp { from { transform: translate(-50%, 100%); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
-        .fade-in { animation: fadeIn 0.3s ease-out forwards; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        .fade-in { animation: fadeIn 0.2s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
     </style>
 </head>
-<body class="text-slate-800 flex justify-center selection:bg-blue-200">
+<body class="text-slate-800 selection:bg-blue-200">
 
-    <div class="w-full max-w-2xl h-full flex flex-col relative bg-[#f4f5f9] shadow-2xl overflow-hidden">
+    <!-- App Container: ปรับแต่งให้ iPad เป็นกล่องตรงกลางจอ มือถือเป็นเต็มจอ -->
+    <div class="w-full h-full md:h-[95dvh] md:max-w-3xl md:rounded-[2.5rem] md:border border-white/50 flex flex-col relative bg-[#f4f5f9] md:shadow-2xl overflow-hidden">
         
         <!-- Header -->
-        <header class="flex-none pt-8 pb-3 px-6 flex justify-between items-center bg-[#f4f5f9] z-10 shrink-0">
+        <header class="flex-none pt-8 md:pt-6 pb-3 px-6 md:px-8 flex justify-between items-center bg-[#f4f5f9] z-10 shrink-0">
             <div>
-                <p class="text-xs font-medium text-slate-500 mb-0.5">ยินดีต้อนรับ 👋</p>
+                <p class="text-xs md:text-sm font-medium text-slate-500 mb-0.5">ยินดีต้อนรับ 👋</p>
                 <div class="flex items-center gap-2">
-                    <h1 class="text-2xl font-extrabold tracking-tight text-slate-900">ภาพรวมรายจ่าย</h1>
-                    <!-- ไอคอนโหลดเบื้องหลัง (แบบแอปมืออาชีพ) -->
-                    <div id="bgSyncIndicator" class="hidden flex items-center justify-center bg-blue-50 px-2 py-1 rounded-full gap-1.5 transition-opacity">
+                    <h1 class="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900">ภาพรวมรายจ่าย</h1>
+                    <div id="bgSyncIndicator" class="hidden flex items-center justify-center bg-blue-50 px-2.5 py-1 md:py-1.5 rounded-full gap-1.5 transition-opacity">
                         <div class="spinner-small"></div>
-                        <span class="text-[10px] font-bold text-blue-600 tracking-wide">กำลังซิงค์...</span>
+                        <span class="text-[10px] md:text-xs font-bold text-blue-600 tracking-wide">กำลังซิงค์...</span>
                     </div>
                 </div>
             </div>
             <div class="text-right flex flex-col items-end">
-                <span id="lastUpdated" class="text-[10px] font-bold uppercase tracking-wider text-slate-500 bg-slate-200/60 px-3 py-1 rounded-full mb-1">รอการซิงค์</span>
-                <button onclick="toggleModal('rawModal')" class="text-[11px] font-semibold text-blue-600 hover:text-blue-700 bg-blue-50 px-2 py-1 rounded-lg flex items-center gap-1 active:scale-95 transition-transform">
-                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                <span id="lastUpdated" class="text-[10px] md:text-xs font-bold uppercase tracking-wider text-slate-500 bg-slate-200/60 px-3 py-1 rounded-full mb-1.5">รอการซิงค์</span>
+                <button onclick="toggleModal('rawModal')" class="text-[11px] md:text-xs font-semibold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg flex items-center gap-1.5 active:scale-95 transition-colors duration-200">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
                     ดู/แก้ไขข้อมูล
                 </button>
             </div>
         </header>
 
         <!-- Main Content Area -->
-        <main class="flex-1 flex flex-col px-5 pb-5 gap-4 min-h-0">
+        <main class="flex-1 flex flex-col px-5 md:px-8 pb-5 md:pb-8 gap-4 min-h-0">
             
             <!-- Hero Card -->
-            <div class="flex-none bg-slate-900 rounded-[2rem] p-6 text-white shadow-xl relative overflow-hidden shrink-0 transition-all duration-300" id="heroCard">
-                <div class="absolute top-0 right-0 w-48 h-48 bg-blue-500 rounded-full mix-blend-multiply filter blur-3xl opacity-40 translate-x-1/3 -translate-y-1/3"></div>
-                <div class="absolute bottom-0 left-0 w-32 h-32 bg-purple-500 rounded-full mix-blend-multiply filter blur-3xl opacity-40 -translate-x-1/3 translate-y-1/3"></div>
+            <div class="flex-none bg-slate-900 rounded-[2rem] p-6 md:p-8 text-white shadow-xl relative overflow-hidden shrink-0 transition-all duration-300" id="heroCard">
+                <div class="absolute top-0 right-0 w-64 h-64 bg-blue-500 rounded-full mix-blend-multiply filter blur-3xl opacity-40 translate-x-1/3 -translate-y-1/3"></div>
+                <div class="absolute bottom-0 left-0 w-48 h-48 bg-purple-500 rounded-full mix-blend-multiply filter blur-3xl opacity-40 -translate-x-1/3 translate-y-1/3"></div>
                 
-                <div class="relative z-10">
-                    <div class="flex justify-between items-start mb-3">
-                        <div class="bg-white/10 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/10 flex items-center gap-2">
+                <div class="relative z-10 flex flex-col justify-between h-full">
+                    <div class="flex justify-between items-start mb-4 md:mb-6">
+                        <div class="bg-white/10 backdrop-blur-md px-3.5 py-1.5 rounded-xl border border-white/10 flex items-center gap-2">
                             <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                            <span class="text-xs font-heading font-medium text-white" id="heroLabel">รวมทั้งหมด</span>
+                            <span class="text-xs md:text-sm font-heading font-medium text-white" id="heroLabel">รวมทั้งหมด</span>
                         </div>
-                        <div class="bg-white/10 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/5 flex items-center gap-1.5">
-                            <span class="text-[11px] font-medium text-slate-200" id="totalItems">0 รายการ</span>
+                        <div class="bg-white/10 backdrop-blur-md px-4 py-1.5 rounded-full border border-white/5 flex items-center gap-1.5">
+                            <span class="text-[11px] md:text-sm font-medium text-slate-200" id="totalItems">0 รายการ</span>
                         </div>
                     </div>
                     
-                    <div class="flex items-baseline gap-2 mt-2">
-                        <span class="text-4xl sm:text-5xl font-heading font-extrabold tracking-tight" id="totalExpense">0</span>
-                        <span class="text-lg font-medium text-slate-400">THB</span>
+                    <div class="flex items-baseline gap-2">
+                        <span class="text-5xl md:text-6xl font-heading font-extrabold tracking-tight" id="totalExpense">0</span>
+                        <span class="text-lg md:text-2xl font-medium text-slate-400">THB</span>
                     </div>
                 </div>
             </div>
 
-            <!-- Buttons -->
-            <div class="flex-none grid grid-cols-2 gap-3 shrink-0">
-                <button onclick="fetchFromCloud(false)" id="btnSync" class="bg-blue-600 hover:bg-blue-700 active:scale-[0.97] transition-all duration-300 text-white py-3.5 px-3 rounded-2xl shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2.5">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
-                    <span class="font-heading font-semibold text-sm">ดึงข้อมูลจาก Cloud</span>
+            <!-- Single Sync Button (แทนปุ่มอัปโหลด) -->
+            <div class="flex-none shrink-0">
+                <button onclick="fetchFromCloud(false)" id="btnSync" class="w-full bg-white border border-slate-200 hover:border-blue-300 hover:bg-blue-50 active:scale-[0.98] transition-all duration-300 text-blue-600 py-3.5 rounded-2xl shadow-sm flex items-center justify-center gap-2.5 group">
+                    <div class="bg-blue-100 p-1.5 rounded-lg text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                    </div>
+                    <span class="font-heading font-bold text-sm md:text-base">ดึงข้อมูลล่าสุดจากระบบ</span>
                 </button>
-
-                <div class="relative active:scale-[0.97] transition-all duration-300">
-                    <input type="file" id="fileInput" accept=".txt" class="hidden" onchange="handleFileUpload(event)">
-                    <label for="fileInput" class="bg-white hover:bg-slate-50 text-slate-800 py-3.5 px-3 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-center gap-2.5 cursor-pointer h-full">
-                        <svg class="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
-                        <span class="font-heading font-semibold text-sm">อัปโหลดไฟล์เอง</span>
-                    </label>
-                </div>
             </div>
 
             <!-- Month Selector & Daily List -->
             <section class="flex-1 flex flex-col min-h-0 bg-white rounded-3xl border border-slate-100 shadow-[0_2px_15px_rgb(0,0,0,0.02)] overflow-hidden">
-                <div class="flex justify-between items-center p-2 border-b border-slate-50 bg-white z-10">
+                <div class="flex justify-between items-center p-3 border-b border-slate-50 bg-white z-10">
                     <button onclick="changePeriod(-1)" class="p-3 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors active:scale-90">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"></path></svg>
+                        <svg class="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"></path></svg>
                     </button>
-                    <h2 id="currentPeriodLabel" class="text-sm font-heading font-bold text-slate-800">เดือนนี้</h2>
+                    <h2 id="currentPeriodLabel" class="text-sm md:text-base font-heading font-bold text-slate-800">เดือนนี้</h2>
                     <button onclick="changePeriod(1)" class="p-3 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors active:scale-90">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path></svg>
+                        <svg class="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path></svg>
                     </button>
                 </div>
 
-                <div id="dailySummaryContainer" class="flex-1 overflow-y-auto custom-scroll p-3 flex flex-col gap-2 relative bg-slate-50/50">
-                    <div class="flex flex-col items-center justify-center h-full text-slate-400 opacity-50">
+                <!-- Grid Layout (1 คอลัมน์บนมือถือ, 2 คอลัมน์บน iPad) -->
+                <div id="dailySummaryContainer" class="flex-1 overflow-y-auto custom-scroll p-3 md:p-4 grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 content-start bg-slate-50/50 relative">
+                    <div class="col-span-full flex flex-col items-center justify-center h-full min-h-[150px] text-slate-400 opacity-50">
                         <svg class="w-10 h-10 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
-                        <p class="text-xs font-medium">รอการวิเคราะห์ข้อมูล...</p>
+                        <p class="text-xs md:text-sm font-medium">รอการวิเคราะห์ข้อมูล...</p>
                     </div>
                 </div>
             </section>
@@ -126,28 +124,28 @@
     </div>
 
     <!-- Modal: Daily Details -->
-    <div id="detailModal" class="fixed inset-0 z-50 hidden items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/50 backdrop-blur-sm">
-        <div class="bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-lg h-[85vh] sm:h-[80vh] flex flex-col overflow-hidden modal-content-enter mt-auto sm:mt-0">
-            <div class="flex justify-between items-center p-4 border-b border-slate-100 bg-white shrink-0">
+    <div id="detailModal" class="fixed inset-0 z-50 hidden items-end md:items-center justify-center p-0 md:p-4 bg-slate-900/50 backdrop-blur-sm">
+        <div class="bg-white rounded-t-3xl md:rounded-[2rem] shadow-2xl w-full md:max-w-xl h-[85vh] md:h-auto md:max-h-[85vh] flex flex-col overflow-hidden modal-content-enter mt-auto md:mt-0">
+            <div class="flex justify-between items-center p-5 md:p-6 border-b border-slate-100 bg-white shrink-0">
                 <div>
-                    <h3 id="detailModalTitle" class="font-heading font-bold text-slate-800 text-lg">บิลประจำวัน</h3>
-                    <p id="detailModalCount" class="text-[11px] text-slate-500 font-medium mt-0.5">0 รายการ</p>
+                    <h3 id="detailModalTitle" class="font-heading font-bold text-slate-800 text-lg md:text-xl">บิลประจำวัน</h3>
+                    <p id="detailModalCount" class="text-xs md:text-sm text-slate-500 font-medium mt-1">0 รายการ</p>
                 </div>
-                <button onclick="toggleModal('detailModal')" class="bg-slate-100 hover:bg-slate-200 text-slate-500 p-2 rounded-full transition-colors active:scale-90">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                <button onclick="toggleModal('detailModal')" class="bg-slate-100 hover:bg-slate-200 text-slate-500 p-2.5 md:p-3 rounded-full transition-colors active:scale-90">
+                    <svg class="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                 </button>
             </div>
             
-            <div class="p-4 overflow-y-auto custom-scroll bg-slate-50 flex-1">
-                <ul id="detailModalList" class="space-y-2"></ul>
+            <div class="p-5 md:p-6 overflow-y-auto custom-scroll bg-slate-50 flex-1">
+                <ul id="detailModalList" class="space-y-3 md:space-y-4"></ul>
             </div>
 
-            <div class="p-4 border-t border-slate-100 bg-white shrink-0">
-                <div class="flex justify-between items-center bg-indigo-50/80 p-4 rounded-2xl border border-indigo-100">
-                    <span class="font-heading font-semibold text-indigo-800 text-sm">ยอดรวมวันนี้</span>
-                    <div class="flex items-baseline gap-1">
-                        <span id="detailModalTotal" class="text-2xl font-heading font-bold text-indigo-700">0</span>
-                        <span class="text-[10px] font-bold text-indigo-400">THB</span>
+            <div class="p-5 md:p-6 border-t border-slate-100 bg-white shrink-0">
+                <div class="flex justify-between items-center bg-indigo-50 p-4 md:p-5 rounded-2xl border border-indigo-100">
+                    <span class="font-heading font-semibold text-indigo-800 text-sm md:text-base">ยอดรวมวันนี้</span>
+                    <div class="flex items-baseline gap-1.5">
+                        <span id="detailModalTotal" class="text-3xl md:text-4xl font-heading font-bold text-indigo-700">0</span>
+                        <span class="text-xs md:text-sm font-bold text-indigo-400">THB</span>
                     </div>
                 </div>
             </div>
@@ -156,25 +154,25 @@
 
     <!-- Modal: Raw Data View (EDITABLE) -->
     <div id="rawModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-lg h-[85vh] flex flex-col overflow-hidden modal-content-enter">
-            <div class="flex justify-between items-center p-4 border-b border-slate-100 bg-white shrink-0">
-                <h3 class="font-heading font-bold text-slate-800 text-base flex items-center gap-2">
-                    <svg class="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
-                    แก้ไขข้อมูลไฟล์
+        <div class="bg-white rounded-3xl md:rounded-[2rem] shadow-2xl w-full md:max-w-2xl h-[85vh] md:h-[80vh] flex flex-col overflow-hidden modal-content-enter">
+            <div class="flex justify-between items-center p-5 md:p-6 border-b border-slate-100 bg-white shrink-0">
+                <h3 class="font-heading font-bold text-slate-800 text-base md:text-lg flex items-center gap-2">
+                    <svg class="w-5 h-5 md:w-6 md:h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                    แก้ไขข้อมูล
                 </h3>
-                <button onclick="toggleModal('rawModal')" class="bg-slate-100 hover:bg-slate-200 text-slate-500 p-2 rounded-full transition-colors">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                <button onclick="toggleModal('rawModal')" class="bg-slate-100 hover:bg-slate-200 text-slate-500 p-2 md:p-3 rounded-full transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                 </button>
             </div>
             
-            <div class="p-4 overflow-y-auto custom-scroll bg-slate-50 flex-1 relative">
-                <textarea id="textContent" class="w-full h-full bg-transparent font-mono text-sm text-slate-700 resize-none outline-none leading-relaxed" spellcheck="false" placeholder="พิมพ์ข้อมูลรายจ่ายที่นี่..."></textarea>
+            <div class="p-5 md:p-6 overflow-y-auto custom-scroll bg-slate-50 flex-1 relative">
+                <textarea id="textContent" class="w-full h-full bg-transparent font-mono text-sm md:text-base text-slate-700 resize-none outline-none leading-relaxed" spellcheck="false" placeholder="พิมพ์ข้อมูลรายจ่ายที่นี่..."></textarea>
             </div>
 
-            <div class="p-4 border-t border-slate-100 bg-white shrink-0 flex gap-2">
-                <button onclick="toggleModal('rawModal')" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold py-3 rounded-xl transition-colors">ยกเลิก</button>
-                <button onclick="saveToCloud()" class="flex-[2] bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl transition-colors flex items-center justify-center gap-2">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+            <div class="p-5 md:p-6 border-t border-slate-100 bg-white shrink-0 flex gap-3">
+                <button onclick="toggleModal('rawModal')" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold py-3.5 md:py-4 rounded-xl md:rounded-2xl transition-colors md:text-lg">ยกเลิก</button>
+                <button onclick="saveToCloud()" class="flex-[2] bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3.5 md:py-4 rounded-xl md:rounded-2xl transition-colors flex items-center justify-center gap-2 md:text-lg shadow-lg shadow-blue-500/30">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
                     บันทึกขึ้นระบบ
                 </button>
             </div>
@@ -182,32 +180,28 @@
     </div>
 
     <!-- Toast Notification -->
-    <div id="toast" class="fixed top-6 left-1/2 -translate-x-1/2 z-[60] hidden pointer-events-none">
-        <div id="toastContent" class="bg-slate-900 text-white px-5 py-2.5 rounded-full shadow-xl font-medium text-xs flex items-center gap-2 border border-slate-700/50 backdrop-blur-md">
+    <div id="toast" class="fixed top-8 left-1/2 -translate-x-1/2 z-[60] hidden pointer-events-none">
+        <div id="toastContent" class="bg-slate-900 text-white px-5 py-3 rounded-full shadow-2xl font-medium text-xs md:text-sm flex items-center gap-2 border border-slate-700/50 backdrop-blur-md">
             <span id="toastIcon"></span>
             <span id="toastMessage">แจ้งเตือน</span>
         </div>
     </div>
 
     <script>
-        // ใส่ URL ของ Web App ตรงนี้
+        // URL Web App
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby5wog2rJaNIqPplRKoIzvm-EWolvtSGkEZ8Owrav1sxlkqKdshENQUdPLoSGoH9M_Y/exec";
-        const CACHE_KEY = "expense_app_cache_v1"; // กุญแจสำหรับระบบ Cache
+        const CACHE_KEY = "expense_app_cache_v2"; 
 
         let appData = { allTime: { total: 0, count: 0 }, periods: [], groupedData: {} };
         let currentPeriodIndex = 0;
         const thaiMonths = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
 
-        // 🌟 เริ่มต้นระบบแบบ Cache-First (โหลดปุ๊บ ติดปั๊บ)
         window.onload = () => {
-            // 1. ดึงของเก่าจากในเครื่องมาแสดงให้ดูก่อนทันที (ไวมาก)
             const cachedData = localStorage.getItem(CACHE_KEY);
             if (cachedData) {
                 const data = JSON.parse(cachedData);
-                // หลอกหน้าจอว่าอัปเดตเมื่อกี้ แต่จริงๆ คือของเก่า
                 processData(data.content, "รอการซิงค์ข้อมูลล่าสุด..."); 
             }
-            // 2. แอบไปดึงข้อมูลใหม่จาก Google แบบเงียบๆ
             fetchFromCloud(true);
         };
 
@@ -222,7 +216,6 @@
             }
         }
 
-        // ฟังก์ชันดึงข้อมูล (isBackground = true คือการแอบดึงเบื้องหลัง)
         async function fetchFromCloud(isBackground = false) {
             const btn = document.getElementById('btnSync');
             const originalHTML = btn.innerHTML;
@@ -230,9 +223,9 @@
 
             try {
                 if (isBackground) {
-                    bgSyncIcon.classList.remove('hidden'); // โชว์ป้าย "กำลังซิงค์..." ด้านบน
+                    bgSyncIcon.classList.remove('hidden'); 
                 } else {
-                    btn.innerHTML = `<div class="spinner text-white"></div><span class="font-heading font-semibold text-sm">กำลังดึง...</span>`;
+                    btn.innerHTML = `<div class="spinner text-blue-600 border-slate-200"></div><span class="font-heading font-semibold text-sm md:text-base text-blue-600">กำลังดึง...</span>`;
                     btn.style.pointerEvents = 'none';
                 }
 
@@ -240,20 +233,16 @@
                 if (!response.ok) throw new Error('Network error');
                 
                 const data = await response.json();
-                
-                // 💾 เซฟข้อมูลใหม่ลง Cache ในเครื่องมือถือ/คอม
                 localStorage.setItem(CACHE_KEY, JSON.stringify(data));
-                
-                // อัปเดตหน้าจอด้วยข้อมูลใหม่ล่าสุด
                 processData(data.content, data.updateTime);
                 
-                if (!isBackground) showToast('ดึงข้อมูลสำเร็จ', 'success');
+                if (!isBackground) showToast('ซิงค์ข้อมูลล่าสุดเรียบร้อย', 'success');
             } catch (e) {
                 if (!isBackground) showToast('ไม่สามารถดึงข้อมูลได้', 'error');
                 console.error(e);
             } finally {
                 if (isBackground) {
-                    bgSyncIcon.classList.add('hidden'); // ซ่อนป้าย
+                    bgSyncIcon.classList.add('hidden'); 
                 } else {
                     btn.innerHTML = originalHTML;
                     btn.style.pointerEvents = 'auto';
@@ -261,30 +250,11 @@
             }
         }
 
-        function handleFileUpload(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = e => {
-                const content = e.target.result;
-                const time = `อัปเดตเมื่อ ${new Date().toLocaleTimeString("th-TH")}`;
-                processData(content, time);
-                // เซฟลง Cache ด้วย
-                localStorage.setItem(CACHE_KEY, JSON.stringify({ content: content, updateTime: time }));
-                showToast('อ่านไฟล์สำเร็จ', 'success');
-            };
-            reader.readAsText(file, 'UTF-8');
-            event.target.value = '';
-        }
-
         async function saveToCloud() {
             const newText = document.getElementById('textContent').value;
             const nowTime = `แก้ไขล่าสุดเมื่อ ${new Date().toLocaleTimeString("th-TH")} (รอซิงค์ลงคอม)`;
             
-            // 1. อัปเดตหน้าจอทันที
             processData(newText, nowTime);
-            
-            // 2. เซฟลง Cache ทันที (เผื่อผู้ใช้ปิดแอปไปก่อน)
             localStorage.setItem(CACHE_KEY, JSON.stringify({ content: newText, updateTime: nowTime }));
             
             try {
@@ -297,7 +267,7 @@
                     body: formData
                 });
                 
-                showToast('บันทึกขึ้นระบบแล้ว! ระบบ AHK จะดึงไปลงไฟล์ให้อัตโนมัติ', 'success');
+                showToast('บันทึกขึ้นระบบแล้ว! AHK จะดึงลงไฟล์อัตโนมัติ', 'success');
             } catch (error) {
                 console.error(error);
                 showToast('บันทึกไม่สำเร็จ', 'error');
@@ -370,12 +340,7 @@
             }
 
             appData.periods = Object.keys(appData.groupedData).sort().reverse();
-            
-            if (appData.periods.length > 1) {
-                appData.periods.push("all");
-            }
-
-            // ถ้ารอบปัจจุบันหายไปแล้ว (เช่น ถูกลบข้อมูลหมด) ให้กลับไปเดือนแรกสุด
+            if (appData.periods.length > 1) appData.periods.push("all");
             if (currentPeriodIndex >= appData.periods.length) currentPeriodIndex = 0; 
             
             renderDashboard();
@@ -395,9 +360,9 @@
                 document.getElementById('totalExpense').textContent = "0";
                 document.getElementById('totalItems').textContent = "0 รายการ";
                 document.getElementById('dailySummaryContainer').innerHTML = `
-                    <div class="flex flex-col items-center justify-center h-full text-slate-400 opacity-50">
+                    <div class="col-span-full flex flex-col items-center justify-center h-full min-h-[150px] text-slate-400 opacity-50">
                         <svg class="w-10 h-10 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
-                        <p class="text-xs font-medium">ไม่พบรายการรายจ่าย</p>
+                        <p class="text-xs md:text-sm font-medium">ไม่พบรายการรายจ่าย</p>
                     </div>`;
                 return;
             }
@@ -412,7 +377,6 @@
             document.getElementById('heroLabel').textContent = displayLabel;
             document.getElementById('totalExpense').textContent = displayTotal.toLocaleString('th-TH');
             document.getElementById('totalItems').textContent = `${displayCount.toLocaleString('th-TH')} รายการ`;
-
             document.getElementById('currentPeriodLabel').textContent = isAllTime ? "ภาพรวมทั้งหมด" : appData.groupedData[pKey].label;
 
             const container = document.getElementById('dailySummaryContainer');
@@ -422,11 +386,7 @@
             if (isAllTime) {
                 for (let k of appData.periods.filter(k => k !== "all")) {
                     daysToRender.push({
-                        title: appData.groupedData[k].label,
-                        subtitle: "สรุปรายเดือน",
-                        total: appData.groupedData[k].total,
-                        count: appData.groupedData[k].count,
-                        onClickArgs: null 
+                        title: appData.groupedData[k].label, subtitle: "สรุปรายเดือน", total: appData.groupedData[k].total, count: appData.groupedData[k].count, onClickArgs: null 
                     });
                 }
             } else {
@@ -434,36 +394,32 @@
                 for (const [date, data] of Object.entries(daysObj)) {
                     if (data.total > 0) {
                         daysToRender.push({
-                            title: date,
-                            subtitle: "บิลประจำวัน",
-                            total: data.total,
-                            count: data.items.length,
-                            onClickArgs: `openDailyDetails('${pKey}', '${date}')`
+                            title: date, subtitle: "บิลประจำวัน", total: data.total, count: data.items.length, onClickArgs: `openDailyDetails('${pKey}', '${date}')`
                         });
                     }
                 }
             }
 
             daysToRender.forEach((d, i) => {
-                const clickAttr = d.onClickArgs ? `onclick="${d.onClickArgs}" class="cursor-pointer hover:border-blue-200 active:scale-[0.98] transition-all bg-white border border-slate-100 rounded-2xl p-3 sm:p-4 flex items-center justify-between shadow-[0_2px_8px_rgba(0,0,0,0.02)] group"` : `class="bg-white border border-slate-100 rounded-2xl p-3 sm:p-4 flex items-center justify-between shadow-[0_2px_8px_rgba(0,0,0,0.02)]"`;
+                const clickAttr = d.onClickArgs ? `onclick="${d.onClickArgs}" class="cursor-pointer hover:border-blue-300 hover:shadow-md active:scale-[0.98] transition-all bg-white border border-slate-100 rounded-2xl p-4 md:p-5 flex items-center justify-between shadow-[0_2px_8px_rgba(0,0,0,0.02)] group"` : `class="bg-white border border-slate-100 rounded-2xl p-4 md:p-5 flex items-center justify-between shadow-[0_2px_8px_rgba(0,0,0,0.02)]"`;
                 
                 const html = `
-                    <div ${clickAttr} style="animation: fadeIn 0.3s ease-out ${i*0.05}s both;">
-                        <div class="flex items-center gap-3">
-                            <div class="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-500 transition-colors shrink-0">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                    <div ${clickAttr} style="animation: fadeIn 0.2s ease-out ${i*0.03}s both;">
+                        <div class="flex items-center gap-3 md:gap-4">
+                            <div class="w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-500 transition-colors shrink-0">
+                                <svg class="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
                             </div>
                             <div class="min-w-0">
-                                <h3 class="font-heading font-semibold text-slate-800 text-sm truncate">${d.title}</h3>
-                                <p class="text-[10px] text-slate-400 font-medium">${d.count} รายการ</p>
+                                <h3 class="font-heading font-semibold text-slate-800 text-sm md:text-base truncate">${d.title}</h3>
+                                <p class="text-[10px] md:text-xs text-slate-400 font-medium">${d.count} รายการ</p>
                             </div>
                         </div>
                         <div class="text-right flex items-center gap-2 shrink-0 pl-2">
                             <div>
-                                <div class="text-base font-heading font-bold text-slate-900">${d.total.toLocaleString('th-TH')}</div>
-                                <div class="text-[9px] font-bold text-slate-400 uppercase leading-none">THB</div>
+                                <div class="text-base md:text-lg font-heading font-bold text-slate-900">${d.total.toLocaleString('th-TH')}</div>
+                                <div class="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase leading-none">THB</div>
                             </div>
-                            ${d.onClickArgs ? `<svg class="w-4 h-4 text-slate-300 group-hover:text-blue-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>` : ''}
+                            ${d.onClickArgs ? `<svg class="w-4 h-4 md:w-5 md:h-5 text-slate-300 group-hover:text-blue-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>` : ''}
                         </div>
                     </div>
                 `;
@@ -484,10 +440,10 @@
 
             data.items.forEach(item => {
                 const li = document.createElement('li');
-                li.className = "bg-white p-3 sm:p-4 rounded-xl shadow-sm border border-slate-100 flex justify-between items-center";
+                li.className = "bg-white p-4 md:p-5 rounded-2xl shadow-sm border border-slate-100 flex justify-between items-center";
                 li.innerHTML = `
-                    <span class="text-slate-700 font-medium text-[13px] sm:text-sm flex-1 pr-4 leading-snug">${item.name}</span>
-                    <span class="font-heading font-bold text-slate-900 text-sm sm:text-base">${item.amount.toLocaleString('th-TH')}</span>
+                    <span class="text-slate-700 font-medium text-[13px] md:text-base flex-1 pr-4 leading-snug">${item.name}</span>
+                    <span class="font-heading font-bold text-slate-900 text-sm md:text-lg">${item.amount.toLocaleString('th-TH')}</span>
                 `;
                 listContainer.appendChild(li);
             });
@@ -502,8 +458,8 @@
             const iconEl = document.getElementById('toastIcon');
             
             iconEl.innerHTML = type === 'success' 
-                ? '<svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>'
-                : '<svg class="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>';
+                ? '<svg class="w-4 h-4 md:w-5 md:h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>'
+                : '<svg class="w-4 h-4 md:w-5 md:h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>';
 
             toast.classList.remove('hidden');
             toast.classList.add('toast-enter');
