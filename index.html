@@ -3140,7 +3140,72 @@ updateCartDisplay() {
                 }
             }
         }
-        // ---------------------------------------------------------
+        else if (e.key === '-') {
+            // เช็คว่าเคอร์เซอร์ไม่ได้อยู่ในช่องพิมพ์ข้อความอื่น
+            const activeEl = document.activeElement;
+            const isTypingInInput = activeEl && ['input', 'textarea', 'select'].includes(activeEl.tagName.toLowerCase());
+
+            // ให้ทำงานเฉพาะเมื่อไม่ได้พิมพ์อยู่ในช่องอื่น (หรือเคอร์เซอร์อยู่ที่ช่องบาร์โค้ด)
+            if (!isTypingInInput || activeEl.id === 'barcode-input') {
+                
+                // ตรวจสอบก่อนว่าช่องค้นหาไม่ได้มีข้อความอยู่ 
+                // (เพื่อป้องกันปัญหากรณีที่รหัสบาร์โค้ดของสินค้ามีเครื่องหมาย - ผสมอยู่)
+                const searchInput = document.getElementById('barcode-input');
+                if (searchInput && searchInput.value.trim() !== '') {
+                    return; // ถ้ายอดพิมพ์รหัสค้างไว้ ให้ข้ามไปพิมพ์ขีดกลางปกติตามบาร์โค้ด
+                }
+
+                e.preventDefault(); // ป้องกันไม่ให้พิมพ์ตัว - ลงไปในช่อง
+                const cart = this.getActiveCart();
+                
+                // ตรวจสอบว่าในตะกร้ามีสินค้าอย่างน้อย 1 ชิ้น
+                if (cart && cart.length > 0) {
+                    const lastIndex = cart.length - 1;
+                    cart[lastIndex].quantity -= 1; // ลดจำนวนของสินค้าชิ้นล่าสุดลง 1
+                    
+                    // ถ้าลดจำนวนแล้วเหลือน้อยกว่าหรือเท่ากับ 0 ให้ลบสินค้านั้นออกจากตะกร้า
+                    if (cart[lastIndex].quantity <= 0) {
+                        cart.splice(lastIndex, 1);
+                    }
+                    
+                    this.updateCartDisplay(); // อัปเดตการแสดงผลตะกร้าสินค้า
+                }
+            }
+        }
+        else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+            const activeEl = document.activeElement;
+            
+            // เช็คว่าเคอร์เซอร์อยู่ในบริเวณตะกร้าสินค้า (#cart-items) หรือไม่
+            if (activeEl && activeEl.closest('#cart-items')) {
+                e.preventDefault(); // ป้องกันไม่ให้ตัวเลขในช่องเพิ่ม/ลดเอง และไม่ให้หน้าจอเลื่อน
+
+                const cartRows = Array.from(document.querySelectorAll('#cart-items li'));
+                const currentRow = activeEl.closest('li');
+                const currentIndex = cartRows.indexOf(currentRow);
+                
+                // คำนวณหาลำดับแถวถัดไป (ขึ้น = -1, ลง = +1)
+                let targetIndex = e.key === 'ArrowUp' ? currentIndex - 1 : currentIndex + 1;
+                
+                // ตรวจสอบว่าไม่ได้เลื่อนทะลุเกินแถวที่มีอยู่
+                if (targetIndex >= 0 && targetIndex < cartRows.length) {
+                    // หาคลาสของคอลัมน์เดิมที่กำลังโฟกัสอยู่ (เช่น col-qty หรือ col-price) 
+                    // เพื่อให้เลื่อนขึ้นลงในคอลัมน์เดิมอย่างตรงแนว
+                    const parentDiv = activeEl.closest('div[class^="col-"]');
+                    if (parentDiv) {
+                        const colClass = parentDiv.className.split(' ')[0]; // ดึงชื่อคลาสหลักมา
+                        const targetEl = cartRows[targetIndex].querySelector(`.${colClass} input, .${colClass} button`);
+                        
+                        if (targetEl) {
+                            targetEl.focus(); // โฟกัสไปที่ช่องใหม่
+                            // ถ้าเป้าหมายคือช่องกรอกข้อความ (Input) ให้คลุมดำตัวเลขรอไว้เลย
+                            if (targetEl.tagName.toLowerCase() === 'input') {
+                                targetEl.select(); 
+                            }
+                        }
+                    }
+                }
+            }
+        }
         else if (e.key === 'Escape') { 
             if(this.state.activeOverlay) {
                 this.hideHistoryModal();
