@@ -3122,53 +3122,61 @@ updateCartDisplay() {
                 }
             }
         }
-        else if (e.key === '+') {
-            // เช็คว่าเคอร์เซอร์อยู่ในช่องพิมพ์ข้อความอื่นที่ไม่ใช่ช่องค้นหาหรือไม่
+        else if (e.key === '+' || e.key === '-') {
             const activeEl = document.activeElement;
             const isTypingInInput = activeEl && ['input', 'textarea', 'select'].includes(activeEl.tagName.toLowerCase());
+            const searchInput = document.getElementById('barcode-input');
+            const inCartRow = activeEl && activeEl.closest('#cart-items li');
 
-            // ให้ทำงานเฉพาะเมื่อไม่ได้พิมพ์อยู่ในช่องอื่น (หรือเคอร์เซอร์อยู่ที่ช่องบาร์โค้ด)
-            if (!isTypingInInput || activeEl.id === 'barcode-input') {
-                e.preventDefault(); // ป้องกันไม่ให้พิมพ์ตัว + ลงไปในช่อง
-                const cart = this.getActiveCart();
-                
-                // ตรวจสอบว่าในตะกร้ามีสินค้าอย่างน้อย 1 ชิ้น
-                if (cart && cart.length > 0) {
-                    const lastIndex = cart.length - 1;
-                    cart[lastIndex].quantity += 1; // เพิ่มจำนวนของสินค้าชิ้นล่าสุดอีก 1
-                    this.updateCartDisplay();      // อัปเดตการแสดงผลตะกร้าสินค้า
-                }
+            // กรณีปุ่ม - และกำลังพิมพ์บาร์โค้ดในช่องค้นหา ให้พิมพ์ขีดกลางได้ปกติ
+            if (e.key === '-' && activeEl && activeEl.id === 'barcode-input' && searchInput && searchInput.value.trim() !== '') {
+                return;
             }
-        }
-        else if (e.key === '-') {
-            // เช็คว่าเคอร์เซอร์ไม่ได้อยู่ในช่องพิมพ์ข้อความอื่น
-            const activeEl = document.activeElement;
-            const isTypingInInput = activeEl && ['input', 'textarea', 'select'].includes(activeEl.tagName.toLowerCase());
 
-            // ให้ทำงานเฉพาะเมื่อไม่ได้พิมพ์อยู่ในช่องอื่น (หรือเคอร์เซอร์อยู่ที่ช่องบาร์โค้ด)
-            if (!isTypingInInput || activeEl.id === 'barcode-input') {
-                
-                // ตรวจสอบก่อนว่าช่องค้นหาไม่ได้มีข้อความอยู่ 
-                // (เพื่อป้องกันปัญหากรณีที่รหัสบาร์โค้ดของสินค้ามีเครื่องหมาย - ผสมอยู่)
-                const searchInput = document.getElementById('barcode-input');
-                if (searchInput && searchInput.value.trim() !== '') {
-                    return; // ถ้ายอดพิมพ์รหัสค้างไว้ ให้ข้ามไปพิมพ์ขีดกลางปกติตามบาร์โค้ด
-                }
-
-                e.preventDefault(); // ป้องกันไม่ให้พิมพ์ตัว - ลงไปในช่อง
+            // จะทำงานเมื่อ: ไม่ได้พิมพ์ในช่องอื่น หรือ โฟกัสอยู่ช่องค้นหา หรือ โฟกัสอยู่ในรายการตะกร้าสินค้า
+            if (!isTypingInInput || (activeEl && activeEl.id === 'barcode-input') || inCartRow) {
+                e.preventDefault(); 
                 const cart = this.getActiveCart();
                 
-                // ตรวจสอบว่าในตะกร้ามีสินค้าอย่างน้อย 1 ชิ้น
                 if (cart && cart.length > 0) {
-                    const lastIndex = cart.length - 1;
-                    cart[lastIndex].quantity -= 1; // ลดจำนวนของสินค้าชิ้นล่าสุดลง 1
-                    
-                    // ถ้าลดจำนวนแล้วเหลือน้อยกว่าหรือเท่ากับ 0 ให้ลบสินค้านั้นออกจากตะกร้า
-                    if (cart[lastIndex].quantity <= 0) {
-                        cart.splice(lastIndex, 1);
+                    // กำหนดเป้าหมายเริ่มต้นเป็น "สินค้ารายการสุดท้าย" (ล่างสุด)
+                    let targetIndex = cart.length - 1;
+                    let shouldKeepFocus = false;
+
+                    // แต่ถ้ากำลังโฟกัส(หรือเลื่อนลูกศร) อยู่ที่แถวไหนในตะกร้า ให้เปลี่ยนเป้าหมายมาเป็นแถวนั้นแทน!
+                    if (inCartRow) {
+                        const cartRows = Array.from(document.querySelectorAll('#cart-items li'));
+                        targetIndex = cartRows.indexOf(inCartRow);
+                        shouldKeepFocus = true; // แจ้งระบบว่าต้องดึงโฟกัสกลับมาที่เดิมหลังรีเฟรชยอด
                     }
-                    
-                    this.updateCartDisplay(); // อัปเดตการแสดงผลตะกร้าสินค้า
+
+                    if (targetIndex >= 0 && targetIndex < cart.length) {
+                        if (e.key === '+') {
+                            cart[targetIndex].quantity += 1;
+                        } else if (e.key === '-') {
+                            cart[targetIndex].quantity -= 1;
+                            // ถ้ายอดเหลือ 0 ให้ลบสินค้าทิ้ง
+                            if (cart[targetIndex].quantity <= 0) {
+                                cart.splice(targetIndex, 1);
+                                shouldKeepFocus = false; // ถ้าลบสินค้าทิ้งไปแล้ว ไม่ต้องพยายามคืนค่าโฟกัส
+                            }
+                        }
+
+                        // รีเฟรชหน้าจอเพื่ออัปเดตยอดรวม
+                        this.updateCartDisplay();
+
+                        // สำคัญมาก: คืนค่าเคอร์เซอร์กลับไปที่ช่องเดิม เพื่อให้ผู้ใช้สามารถกด + หรือ - รัวๆ ต่อได้
+                        if (shouldKeepFocus) {
+                            const newRows = document.querySelectorAll('#cart-items li');
+                            if (newRows[targetIndex]) {
+                                const inputToFocus = newRows[targetIndex].querySelector('.col-qty input');
+                                if (inputToFocus) {
+                                    inputToFocus.focus();
+                                    inputToFocus.select();
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
