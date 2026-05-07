@@ -5245,23 +5245,42 @@ document.addEventListener("DOMContentLoaded", function() {
                 this.resetSearchUI();
             }
         };
-
 const searchInput = document.getElementById('barcode-input');
-        if (searchInput) {
-            searchInput.addEventListener('keydown', function(e) {
-                // [เพิ่มเงื่อนไขนี้] ปล่อยผ่านถ้ากด Ctrl เพื่อให้ใช้ Ctrl+ซ้าย/ขวา สลับบิลได้
-                if (e.ctrlKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
-                    return;
-                }
+if (searchInput) {
+    searchInput.addEventListener('keydown', function(e) {
+        // ปล่อยผ่านถ้ากด Ctrl เพื่อให้ใช้ Ctrl+ซ้าย/ขวา สลับบิลได้ตามปกติ
+        if (e.ctrlKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) return;
 
-                const targetKeys = ['Enter', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Escape'];
-                if (targetKeys.includes(e.key)) {
-                    e.stopImmediatePropagation(); 
-                    app.myNewHandleSearchKeyDown(e);
+        const targetKeys = ['Enter', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Escape'];
+        if (targetKeys.includes(e.key)) {
+            
+            // --- ส่วนที่เพิ่มเข้ามาใหม่: ตรวจสอบว่ามีผลลัพธ์การค้นหาหรือไม่ ---
+            const hasSearchResults = app.state.groupedSearchResults && app.state.groupedSearchResults.length > 0;
+            
+            if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && !hasSearchResults) {
+                // ถ้าไม่มีผลการค้นหา และกดปุ่มขึ้น/ลง ให้ข้ามไปโฟกัสที่รายการสินค้าในตะกร้าทันที
+                const cartItems = document.querySelectorAll('#cart-items li');
+                if (cartItems.length > 0) {
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
+                    
+                    // เลือกรายการสุดท้าย (ล่างสุด) เพื่อให้ใช้งานต่อเนื่องจากการเพิ่งสแกนสินค้า
+                    const lastItemInput = cartItems[cartItems.length - 1].querySelector('.col-qty input');
+                    if (lastItemInput) {
+                        lastItemInput.focus();
+                        lastItemInput.select();
+                    }
                 }
-            }, true); 
+                return;
+            }
+            // -------------------------------------------------------
+
+            // ลอจิกเดิมสำหรับการเลือกผลการค้นหาสินค้า
+            e.stopImmediatePropagation(); 
+            app.myNewHandleSearchKeyDown(e);
         }
-
+    }, true); 
+}
         document.addEventListener('click', (e) => {
             const resultsContainer = document.getElementById('search-results');
             if (resultsContainer.classList.contains('has-results') && !e.target.closest('#search-results') && e.target !== document.getElementById('barcode-input')) {
