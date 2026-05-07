@@ -3121,7 +3121,27 @@ updateCartDisplay() {
                     lastItemInput.select();
                 }
             }
-        } else if (e.key === 'Escape') { 
+        }
+        else if (e.key === '+') {
+            // เช็คว่าเคอร์เซอร์อยู่ในช่องพิมพ์ข้อความอื่นที่ไม่ใช่ช่องค้นหาหรือไม่
+            const activeEl = document.activeElement;
+            const isTypingInInput = activeEl && ['input', 'textarea', 'select'].includes(activeEl.tagName.toLowerCase());
+
+            // ให้ทำงานเฉพาะเมื่อไม่ได้พิมพ์อยู่ในช่องอื่น (หรือเคอร์เซอร์อยู่ที่ช่องบาร์โค้ด)
+            if (!isTypingInInput || activeEl.id === 'barcode-input') {
+                e.preventDefault(); // ป้องกันไม่ให้พิมพ์ตัว + ลงไปในช่อง
+                const cart = this.getActiveCart();
+                
+                // ตรวจสอบว่าในตะกร้ามีสินค้าอย่างน้อย 1 ชิ้น
+                if (cart && cart.length > 0) {
+                    const lastIndex = cart.length - 1;
+                    cart[lastIndex].quantity += 1; // เพิ่มจำนวนของสินค้าชิ้นล่าสุดอีก 1
+                    this.updateCartDisplay();      // อัปเดตการแสดงผลตะกร้าสินค้า
+                }
+            }
+        }
+        // ---------------------------------------------------------
+        else if (e.key === 'Escape') { 
             if(this.state.activeOverlay) {
                 this.hideHistoryModal();
                 this.hideSettingsModal();
