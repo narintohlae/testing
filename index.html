@@ -3,403 +3,283 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ระบบเช็คราคาสินค้า</title>
-    
+    <title>เช็คราคาสินค้า</title>
+    <!-- โหลด Tailwind CSS เพื่อจัดรูปแบบหน้าเว็บให้รองรับมือถือ -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- เพิ่ม Library สำหรับสแกนบาร์โค้ดผ่านกล้อง -->
-    <script src="https://unpkg.com/html5-qrcode"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    
+    <!-- โหลดไลบรารี HTML5 QR Code สำหรับใช้งานกล้องมือถือสแกนบาร์โค้ด -->
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <style>
-        body {
-            font-family: 'Prompt', sans-serif;
-            background-color: #f3f4f6;
-        }
-        /* Hide scrollbar for cleaner mobile look */
-        ::-webkit-scrollbar {
-            width: 0px;
-            background: transparent;
-        }
-        .glass-header {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-        }
+        /* สไตล์เพิ่มเติมสำหรับแอปบนมือถือ */
+        body { background-color: #f3f4f6; -webkit-tap-highlight-color: transparent; }
+        .barcode-font { font-family: 'Courier New', Courier, monospace; letter-spacing: 1px; }
+        #reader { width: 100%; border-radius: 0.5rem; overflow: hidden; }
+        #reader video { object-fit: cover; }
     </style>
 </head>
-<body class="text-gray-800 antialiased">
+<body class="text-gray-800">
 
-    <div class="max-w-md mx-auto min-h-screen bg-gray-50 shadow-xl relative pb-6">
+    <!-- แถบด้านบน (Header) & ช่องค้นหา -->
+    <div class="bg-blue-600 text-white p-4 sticky top-0 z-50 shadow-md">
+        <h1 class="text-xl font-bold text-center mb-4">🛒 เช็คราคาสินค้า</h1>
         
-        <!-- Header & Search Bar (Sticky) -->
-        <header class="glass-header sticky top-0 z-10 border-b border-gray-200 shadow-sm pt-safe">
-            <div class="px-5 pt-6 pb-4 bg-blue-600 rounded-b-3xl shadow-md">
-                <h1 class="text-2xl font-bold text-white mb-4 text-center">เช็คราคาสินค้า</h1>
-                
-                <div class="relative">
-                    <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                        <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-                        </svg>
-                    </div>
-                    <input 
-                        type="text" 
-                        id="searchInput" 
-                        class="w-full pl-12 pr-24 py-3 rounded-2xl border-none shadow-inner focus:ring-4 focus:ring-blue-300 text-lg transition-all outline-none" 
-                        placeholder="ค้นหาชื่อสินค้า, รหัส, บาร์โค้ด..."
-                        autocomplete="off"
-                    >
-                    <div class="absolute inset-y-0 right-0 pr-2 flex items-center gap-1">
-                        <!-- ปุ่มเปิดกล้องสแกน (ใหม่) -->
-                        <button id="startScanBtn" class="p-2 text-gray-500 hover:text-blue-600 transition bg-white rounded-xl shadow-sm border border-gray-100" aria-label="สแกนบาร์โค้ด">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-                        </button>
-                        <!-- ปุ่มลบคำค้นหา -->
-                        <button id="clearSearchBtn" class="p-2 text-gray-400 hover:text-gray-600 hidden bg-white rounded-xl">
-                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
-                            </svg>
-                        </button>
-                    </div>
-                </div>
-            </div>
+        <div class="relative flex items-center">
+            <!-- ช่องค้นหา/รับค่าจากเครื่องสแกน -->
+            <input type="text" id="searchInput" 
+                class="w-full p-3 pl-4 pr-12 rounded-lg text-gray-900 border-2 border-transparent focus:outline-none focus:border-blue-300 shadow-sm text-lg" 
+                placeholder="พิมพ์ชื่อสินค้า หรือ สแกนบาร์โค้ด..." 
+                autocomplete="off">
             
-            <!-- Stats / Info row -->
-            <div class="flex justify-between items-center px-6 py-3 bg-white text-sm text-gray-500 font-medium">
-                <span id="totalItemsCount">กำลังโหลด...</span>
-                <button onclick="fetchData()" class="text-blue-500 flex items-center gap-1 hover:text-blue-700">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
-                    รีเฟรช
-                </button>
-            </div>
-        </header>
+            <!-- ปุ่มเปิดกล้องสแกน -->
+            <button id="cameraBtn" class="absolute right-2 p-2 bg-gray-100 text-blue-600 rounded-md hover:bg-gray-200 active:bg-gray-300 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+            </button>
+        </div>
+        <div id="statusText" class="text-xs text-blue-200 mt-2 text-center">กำลังโหลดข้อมูลสินค้า...</div>
+    </div>
 
-        <!-- Content Area -->
-        <main class="p-4" id="mainContainer">
-            
-            <!-- หน้าต่างสแกนเนอร์ (ซ่อนเป็นค่าเริ่มต้น) -->
-            <div id="scannerModal" class="fixed inset-0 bg-black z-[100] hidden flex-col">
-                <div class="flex justify-between items-center p-4 pt-safe-top bg-gray-900 text-white shadow-md z-10 border-b border-gray-800">
-                    <h3 class="text-lg font-semibold flex items-center gap-2 mt-4">
-                        <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm14 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
-                        สแกนบาร์โค้ด
-                    </h3>
-                    <button id="closeScanBtn" class="px-5 py-2 mt-4 bg-red-600 hover:bg-red-700 rounded-full text-white font-medium transition-colors text-sm">ยกเลิก</button>
-                </div>
-                <!-- พื้นที่แสดงกล้อง -->
-                <div class="flex-1 w-full relative flex items-center justify-center bg-black overflow-hidden">
-                    <div id="reader" class="w-full h-full max-w-lg mx-auto"></div>
-                </div>
-                <div class="p-6 pb-12 bg-gray-900 text-center pb-safe-bottom">
-                    <p class="text-gray-300 text-sm" id="scannerMessage">หันกล้องไปที่บาร์โค้ด ระบบจะค้นหาอัตโนมัติ</p>
-                </div>
-            </div>
+    <!-- ส่วนแสดงผลการค้นหา -->
+    <div id="results" class="p-4 space-y-3 pb-20">
+        <!-- สถานะเริ่มต้นว่างๆ จะถูกแสดงที่นี่ -->
+    </div>
 
-            <!-- Loading State -->
-            <div id="loadingState" class="flex flex-col items-center justify-center py-20">
-                <div class="animate-spin rounded-full h-14 w-14 border-b-4 border-blue-600 mb-4"></div>
-                <p class="text-gray-500 text-lg">กำลังดึงข้อมูล...</p>
+    <!-- หน้าต่าง Modal สำหรับเปิดกล้องสแกนบาร์โค้ด -->
+    <div id="scannerModal" class="fixed inset-0 bg-black bg-opacity-80 z-[60] hidden flex-col items-center justify-center p-4">
+        <div class="w-full max-w-md bg-white rounded-xl overflow-hidden shadow-2xl flex flex-col">
+            <div class="p-4 bg-gray-100 flex justify-between items-center border-b">
+                <h2 class="font-bold text-gray-800">📷 สแกนบาร์โค้ด</h2>
+                <button id="closeScannerBtn" class="text-red-500 font-bold p-2">ปิด ✕</button>
             </div>
-
-            <!-- Error State -->
-            <div id="errorState" class="hidden flex-col items-center justify-center py-20 text-center px-4">
-                <svg class="w-16 h-16 text-red-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                <h3 class="text-xl font-semibold text-gray-800 mb-2">เกิดข้อผิดพลาด</h3>
-                <p class="text-gray-500 mb-4" id="errorMessage">ไม่สามารถดึงข้อมูลได้ โปรดตรวจสอบว่า Google Sheet ได้เปิดแชร์สาธารณะ (Anyone with the link) แล้ว</p>
-                <button onclick="fetchData()" class="px-6 py-2 bg-blue-600 text-white rounded-full shadow hover:bg-blue-700 transition">ลองใหม่อีกครั้ง</button>
+            <!-- พื้นที่แสดงกล้อง -->
+            <div id="reader" class="bg-black w-full min-h-[300px]"></div>
+            <div class="p-4 text-center text-sm text-gray-500">
+                หันกล้องไปที่บาร์โค้ดสินค้า ระบบจะสแกนอัตโนมัติ
             </div>
-
-            <!-- No Results State -->
-            <div id="noResultsState" class="hidden flex-col items-center justify-center py-20 text-center">
-                <svg class="w-16 h-16 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                <h3 class="text-lg font-semibold text-gray-600">ไม่พบสินค้าที่คุณค้นหา</h3>
-                <p class="text-gray-400 text-sm mt-1">ลองใช้คำค้นหาอื่น หรือตรวจสอบตัวสะกด</p>
-            </div>
-
-            <!-- Initial Ready State (New) -->
-            <div id="initialState" class="hidden flex-col items-center justify-center py-24 text-center px-4">
-                <div class="bg-blue-50 p-6 rounded-full mb-4 shadow-inner">
-                    <svg class="w-12 h-12 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm14 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
-                </div>
-                <h3 class="text-xl font-bold text-gray-800 mb-2">พร้อมสแกน / ค้นหา</h3>
-                <p class="text-gray-500 text-sm">สแกนบาร์โค้ด หรือพิมพ์ชื่อสินค้า<br>ระบบจะแสดงผลลัพธ์ทันที</p>
-            </div>
-
-            <!-- Products List -->
-            <div id="productsList" class="flex flex-col gap-4 hidden">
-                <!-- Cards will be injected here -->
-            </div>
-
-        </main>
+        </div>
     </div>
 
     <script>
-        // Google Sheet Configuration
-        const SHEET_ID = '1N2Yja6aMNWN-ZPid8nWq-sV3XgB0exmoHue3hdeUrFk';
-        const GID = '0';
-        const JSON_ENDPOINT = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${GID}`;
+        // ตัวแปรเก็บข้อมูลสินค้าทั้งหมด
+        let productData = [];
+        let html5QrcodeScanner = null;
 
-        // App State
-        let allProducts = [];
-        let sheetHeaders = [];
+        // ID ของ Google Sheet
+        const sheetId = '1N2Yja6aMNWN-ZPid8nWq-sV3XgB0exmoHue3hdeUrFk';
+        // ใช้ Google Visualization API ดึงข้อมูลเป็น JSON
+        const sheetUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&gid=0`;
 
-        // DOM Elements
         const searchInput = document.getElementById('searchInput');
-        const clearSearchBtn = document.getElementById('clearSearchBtn');
-        const productsList = document.getElementById('productsList');
-        const loadingState = document.getElementById('loadingState');
-        const errorState = document.getElementById('errorState');
-        const noResultsState = document.getElementById('noResultsState');
-        const initialState = document.getElementById('initialState');
-        const totalItemsCount = document.getElementById('totalItemsCount');
-
-        const startScanBtn = document.getElementById('startScanBtn');
-        const closeScanBtn = document.getElementById('closeScanBtn');
+        const resultsContainer = document.getElementById('results');
+        const statusText = document.getElementById('statusText');
+        
+        // Element สำหรับกล้อง
+        const cameraBtn = document.getElementById('cameraBtn');
         const scannerModal = document.getElementById('scannerModal');
-        const scannerMessage = document.getElementById('scannerMessage');
-        let html5QrCode;
+        const closeScannerBtn = document.getElementById('closeScannerBtn');
 
-        async function fetchData() {
-            showState('loading');
+        // ฟังก์ชันดึงข้อมูลจาก Google Sheet
+        async function fetchSheetData() {
             try {
-                const response = await fetch(JSON_ENDPOINT);
-                if (!response.ok) throw new Error('Network response was not ok');
-                
+                const response = await fetch(sheetUrl);
                 const text = await response.text();
-                // Extract JSON from Google's response format
-                const jsonMatch = text.match(/google\.visualization\.Query\.setResponse\(([\s\S\w]+)\);/);
+                // ตัด text ส่วนเกินออกให้เหลือแต่ JSON string
+                const jsonString = text.substring(47, text.length - 2);
+                const json = JSON.parse(jsonString);
+
+                // หา index ของคอลัมน์ที่เราต้องการ
+                const cols = json.table.cols.map(c => c ? c.label.trim() : '');
+                const indices = {
+                    'บาร์โค้ด': cols.indexOf('บาร์โค้ด'),
+                    'สินค้า': cols.indexOf('สินค้า'),
+                    'รวม': cols.indexOf('รวม'),
+                    'หน่วย': cols.indexOf('หน่วย')
+                };
+
+                // ฟังก์ชันช่วยดึงค่าจากเซลล์
+                const getCellValue = (row, index) => {
+                    if (index === -1 || !row.c[index]) return '';
+                    // ใช้ .f (formatted value) ก่อน ถ้าไม่มีใช้ .v (value)
+                    return (row.c[index].f !== undefined && row.c[index].f !== null) ? row.c[index].f : row.c[index].v;
+                };
+
+                // แปลงข้อมูลและเก็บลง Array
+                productData = json.table.rows.map(row => {
+                    // --- แก้ไขปัญหาคอมม่า (,) ---
+                    // ดึงค่าบาร์โค้ดมา แล้วใช้ .replace(/,/g, '') เพื่อลบลูกน้ำออกทั้งหมด
+                    let rawBarcode = getCellValue(row, indices['บาร์โค้ด']).toString();
+                    let cleanBarcode = rawBarcode.replace(/,/g, '').trim();
+
+                    return {
+                        barcode: cleanBarcode,
+                        name: getCellValue(row, indices['สินค้า']).toString().trim(),
+                        price: getCellValue(row, indices['รวม']).toString().trim(),
+                        unit: getCellValue(row, indices['หน่วย']).toString().trim()
+                    };
+                }).filter(item => item.name !== ''); // กรองเอาเฉพาะแถวที่มีชื่อสินค้า
+
+                statusText.innerText = `พร้อมใช้งาน (ข้อมูล ${productData.length} รายการ)`;
+                showEmptyState();
                 
-                if (!jsonMatch) throw new Error('Invalid data format received');
-                
-                const data = JSON.parse(jsonMatch[1]);
-                processData(data);
-                
+                // ให้เคอร์เซอร์ไปกระพริบรอที่ช่องค้นหาอัตโนมัติ
+                searchInput.focus();
+
             } catch (error) {
                 console.error("Error fetching data:", error);
-                showState('error');
+                statusText.innerText = "❌ เกิดข้อผิดพลาดในการโหลดข้อมูล (ตรวจสอบสิทธิ์การแชร์ลิงก์)";
+                statusText.classList.add('text-red-300');
             }
         }
 
-        function processData(data) {
-            // ดึงหัวข้อคอลัมน์จาก Sheet
-            sheetHeaders = data.table.cols.map((col, index) => col.label ? col.label.trim() : `Column${index + 1}`);
-            
-            // กำหนดหัวข้อที่ต้องการดึงข้อมูล
-            const targetCols = ['บาร์โค้ด', 'สินค้า', 'รวม', 'หน่วย'];
-
-            // Map ข้อมูลเฉพาะคอลัมน์ที่กำหนด
-            allProducts = data.table.rows.map(row => {
-                let item = {};
-                row.c.forEach((cell, i) => {
-                    const headerName = sheetHeaders[i];
-                    const value = cell ? (cell.f || cell.v || '') : '';
-                    
-                    // เช็คว่าชื่อคอลัมน์ตรงกับ 4 หัวข้อที่ต้องการหรือไม่
-                    targetCols.forEach(target => {
-                        if (headerName.includes(target)) {
-                            item[target] = value;
-                        }
-                    });
-                });
-                return item;
-            });
-
-            // กรองแถวที่ว่างเปล่าออกไป
-            allProducts = allProducts.filter(item => {
-                return Object.values(item).some(val => val.toString().trim() !== '');
-            });
-
-            // ตรวจสอบว่ามีการค้นหาค้างอยู่หรือไม่
-            if(searchInput.value) {
-                handleSearch();
-            } else {
-                totalItemsCount.textContent = `ข้อมูลพร้อมแล้ว (${allProducts.length} รายการ)`;
-                showState('initial');
-            }
+        // แสดงหน้าจอว่างๆ พร้อมไอคอนคำแนะนำ
+        function showEmptyState() {
+            resultsContainer.innerHTML = `
+                <div class="flex flex-col items-center justify-center text-gray-400 mt-16 text-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mb-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm14 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                    </svg>
+                    <p class="text-lg font-medium text-gray-500">พร้อมค้นหา / สแกนสินค้า</p>
+                    <p class="text-sm mt-1">ใช้เครื่องสแกน, เปิดกล้อง, หรือพิมพ์ชื่อสินค้า</p>
+                </div>
+            `;
         }
 
-        function renderProducts(items) {
-            productsList.innerHTML = '';
-            
-            if (items.length === 0) {
-                showState('noResults');
+        // ค้นหาสินค้า
+        function handleSearch() {
+            let query = searchInput.value.trim().toLowerCase();
+
+            // ถ้าช่องค้นหาว่างเปล่า ให้แสดงหน้าจอว่างๆ
+            if (query === '') {
+                showEmptyState();
                 return;
             }
 
-            items.forEach(item => {
-                // ดึงค่าตาม Key ที่เจาะจงไว้
-                const titleText = item['สินค้า'] || 'ไม่ระบุชื่อสินค้า';
-                const barcodeText = item['บาร์โค้ด'] || '-';
-                let priceText = item['รวม'] || '-';
-                const unitText = item['หน่วย'] || '';
-                
-                // ใส่ลูกน้ำ (comma) ให้ตัวเลขราคา
-                if(!isNaN(priceText) && priceText !== '' && priceText !== '-') {
-                    priceText = Number(priceText).toLocaleString('th-TH');
-                }
+            // ลบลูกน้ำออกจากสิ่งที่ผู้ใช้พิมพ์มาด้วย (กันเหนียว)
+            let queryCleanForBarcode = query.replace(/,/g, '');
 
-                // จัดรูปแบบ ราคา + หน่วย
-                let priceDisplay = priceText;
-                if (priceDisplay !== '-') {
-                    priceDisplay += ' ฿';
-                    if (unitText) {
-                        priceDisplay += `<span class="text-sm font-normal text-blue-600 ml-1">/ ${unitText}</span>`;
-                    }
-                }
+            const results = productData.filter(item => {
+                // ค้นหาจากบาร์โค้ด (ที่ถูกคลีนลูกน้ำออกแล้ว) หรือ ค้นหาจากชื่อสินค้า
+                return item.barcode.toLowerCase().includes(queryCleanForBarcode) || 
+                       item.name.toLowerCase().includes(query);
+            });
 
-                // สร้าง HTML สำหรับแต่ละรายการ
+            renderResults(results);
+        }
+
+        // แสดงผลลัพธ์เป็นกล่องการ์ด
+        function renderResults(results) {
+            resultsContainer.innerHTML = ''; // เคลียร์ของเก่า
+
+            if (results.length === 0) {
+                resultsContainer.innerHTML = `
+                    <div class="bg-white rounded-xl shadow p-6 text-center border border-gray-100">
+                        <span class="text-4xl block mb-2">🤔</span>
+                        <p class="text-gray-600 font-medium">ไม่พบสินค้าที่คุณค้นหา</p>
+                    </div>`;
+                return;
+            }
+
+            // สร้างกล่องสินค้าแต่ละชิ้น
+            results.forEach(item => {
                 const card = document.createElement('div');
-                card.className = "bg-white p-5 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow duration-200 relative overflow-hidden";
+                card.className = 'bg-white rounded-xl shadow-sm p-4 border border-gray-100 flex flex-col justify-between items-start hover:shadow-md transition-shadow relative overflow-hidden';
                 
-                // แถบสีด้านซ้าย
-                const isHighlight = parseFloat(item['รวม'] || 0) > 0;
-                const highlightColor = isHighlight ? 'bg-blue-500' : 'bg-gray-300';
-                
-                card.innerHTML = `
-                    <div class="absolute left-0 top-0 bottom-0 w-1 ${highlightColor}"></div>
-                    <div class="pl-2">
-                        <div class="flex justify-between items-start gap-3 mb-3">
-                            <h2 class="text-lg font-semibold text-gray-800 leading-tight">${titleText}</h2>
-                            <div class="bg-blue-50 text-blue-700 px-3 py-1.5 rounded-lg font-bold whitespace-nowrap shadow-sm text-right shrink-0">
-                                <div class="text-lg leading-none">${priceDisplay}</div>
-                            </div>
+                // แถบสีตกแต่งด้านซ้าย
+                const accent = document.createElement('div');
+                accent.className = 'absolute left-0 top-0 bottom-0 w-1 bg-blue-500';
+                card.appendChild(accent);
+
+                // โครงสร้างภายในกล่อง
+                card.innerHTML += `
+                    <div class="w-full flex justify-between items-start gap-2 pl-2">
+                        <div class="flex-1">
+                            <h3 class="text-lg font-bold text-gray-800 leading-tight mb-1">${item.name || 'ไม่มีชื่อสินค้า'}</h3>
+                            <p class="text-sm text-gray-400 barcode-font flex items-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm14 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" /></svg>
+                                ${item.barcode || '-'}
+                            </p>
                         </div>
-                        <div class="space-y-1">
-                            <div class="flex justify-between items-center text-sm mt-1 border-b border-gray-50 border-dashed pb-1">
-                                <span class="text-gray-400">บาร์โค้ด:</span>
-                                <span class="text-gray-600 font-mono bg-gray-100 px-2 py-0.5 rounded text-xs">${barcodeText}</span>
-                            </div>
+                        <div class="bg-blue-50 rounded-lg p-2 text-right min-w-[80px]">
+                            <p class="text-xs text-blue-500 font-semibold mb-0.5">ราคา</p>
+                            <p class="text-xl font-extrabold text-blue-700 whitespace-nowrap">
+                                ${item.price || '0'} <span class="text-sm font-normal text-blue-600">/ ${item.unit || 'ชิ้น'}</span>
+                            </p>
                         </div>
                     </div>
                 `;
-                
-                productsList.appendChild(card);
+                resultsContainer.appendChild(card);
             });
-            
-            showState('content');
         }
 
-        function handleSearch() {
-            const query = searchInput.value.toLowerCase().trim();
-            
-            // Toggle clear button visibility
-            clearSearchBtn.classList.toggle('hidden', query.length === 0);
-            
-            if (query === '') {
-                // ถ้าไม่ได้พิมพ์อะไรเลย ให้แสดงหน้าพร้อมใช้งาน ไม่แสดงสินค้าทั้งหมด
-                totalItemsCount.textContent = `ข้อมูลพร้อมแล้ว (${allProducts.length} รายการ)`;
-                showState('initial');
-                return;
-            }
-
-            const filtered = allProducts.filter(item => {
-                // Search across all values in the object
-                return Object.values(item).some(val => 
-                    val.toString().toLowerCase().includes(query)
-                );
-            });
-
-            totalItemsCount.textContent = `ค้นพบ ${filtered.length} รายการ`;
-            renderProducts(filtered);
-        }
-
-        function showState(state) {
-            loadingState.classList.add('hidden');
-            errorState.classList.add('hidden');
-            noResultsState.classList.add('hidden');
-            productsList.classList.add('hidden');
-            initialState.classList.add('hidden');
-
-            switch(state) {
-                case 'loading': loadingState.classList.remove('hidden'); break;
-                case 'error': errorState.classList.remove('hidden'); break;
-                case 'noResults': noResultsState.classList.remove('hidden'); break;
-                case 'content': productsList.classList.remove('hidden'); break;
-                case 'initial': initialState.classList.remove('hidden'); break;
-            }
-        }
-
-        function initScanner() {
-            if (!html5QrCode) {
-                html5QrCode = new Html5Qrcode("reader");
-            }
-        }
-
-        async function startScanner() {
+        // ==========================================
+        // ส่วนควบคุมกล้องสแกนบาร์โค้ด
+        // ==========================================
+        
+        function startScanner() {
             scannerModal.classList.remove('hidden');
-            scannerMessage.innerHTML = "กำลังเตรียมกล้อง... <br><span class='text-xs text-gray-500'>(หากระบบขอสิทธิ์เข้าถึงกล้อง โปรดกดยืนยัน)</span>";
-            scannerMessage.className = "text-gray-300 text-sm";
+            scannerModal.classList.add('flex');
             
-            initScanner();
+            // ตั้งค่า Html5Qrcode
+            const html5QrCode = new Html5Qrcode("reader");
+            html5QrcodeScanner = html5QrCode;
 
-            // ตั้งค่ากรอบสแกนให้เหมาะกับบาร์โค้ดแนวนอนบนมือถือ
             const config = { 
                 fps: 10, 
-                qrbox: { width: 280, height: 120 },
-                aspectRatio: window.innerWidth / window.innerHeight
+                qrbox: { width: 250, height: 150 },
+                aspectRatio: 1.0,
+                formatsToSupport: [
+                    Html5QrcodeSupportedFormats.EAN_13,
+                    Html5QrcodeSupportedFormats.EAN_8,
+                    Html5QrcodeSupportedFormats.CODE_128,
+                    Html5QrcodeSupportedFormats.CODE_39,
+                    Html5QrcodeSupportedFormats.UPC_A,
+                    Html5QrcodeSupportedFormats.UPC_E
+                ]
             };
-            
-            try {
-                // เรียกใช้กล้องหลัง (environment)
-                await html5QrCode.start(
-                    { facingMode: "environment" }, 
-                    config,
-                    (decodedText, decodedResult) => {
-                        // เมื่อสแกนสำเร็จ
-                        stopScanner();
-                        
-                        // สั่นเครื่องเบาๆ ถ้ามือถือรองรับ
-                        if (navigator.vibrate) {
-                            navigator.vibrate(200);
-                        }
-                        
-                        // นำค่าบาร์โค้ดไปใส่ช่องค้นหา และรันการค้นหา
-                        searchInput.value = decodedText;
-                        handleSearch();
-                    },
-                    (errorMessage) => {
-                        // ไม่ต้องทำอะไรหากอ่านไม่ออก (ระบบจะอ่านเฟรมไปเรื่อยๆ)
-                    }
-                );
-                scannerMessage.textContent = "หันกล้องให้บาร์โค้ดอยู่ตรงกลางกรอบ";
-            } catch (err) {
-                console.error("Camera start error:", err);
-                scannerMessage.innerHTML = `
-                    <span class="text-red-400 font-semibold">❌ ไม่สามารถเปิดกล้องได้</span><br>
-                    <span class="text-xs text-gray-400 mt-2 block">1. โปรดอนุญาตให้เบราว์เซอร์เข้าถึงกล้อง<br>2. iPhone ต้องเปิดใช้งานเว็บผ่านลิ้งค์ <b>HTTPS</b> เท่านั้น</span>
-                `;
-            }
+
+            // เปิดกล้องหลัง
+            html5QrCode.start({ facingMode: "environment" }, config, 
+                // เมื่อสแกนสำเร็จ
+                (decodedText, decodedResult) => {
+                    stopScanner(); // ปิดกล้อง
+                    
+                    // เอาค่าที่สแกนได้ไปใส่ในช่องค้นหา
+                    searchInput.value = decodedText;
+                    
+                    // สั่งค้นหาทันที
+                    handleSearch();
+                    
+                    // (อุปกรณ์เสริม) ส่งเสียงปี๊บเมื่อสแกนติด
+                    // navigator.vibrate([100]); // สั่น
+                },
+                // กรณีสแกนยังไม่เจอ (ข้ามไป ไม่ต้องทำอะไร)
+                (errorMessage) => { }
+            ).catch(err => {
+                alert("ไม่สามารถเปิดกล้องได้ กรุณาอนุญาตให้เว็บไซต์เข้าถึงกล้องของคุณ");
+                stopScanner();
+            });
         }
 
-        async function stopScanner() {
-            if (html5QrCode && html5QrCode.isScanning) {
-                try {
-                    await html5QrCode.stop();
-                } catch (err) {
-                    console.error("Failed to stop scanner", err);
-                }
+        function stopScanner() {
+            if (html5QrcodeScanner) {
+                html5QrcodeScanner.stop().then(() => {
+                    html5QrcodeScanner.clear();
+                    html5QrcodeScanner = null;
+                }).catch(err => console.log("Error stopping scanner", err));
             }
             scannerModal.classList.add('hidden');
-            // คืนโฟกัสให้ช่องค้นหา
-            searchInput.focus();
+            scannerModal.classList.remove('flex');
         }
 
-        // Event Listeners
-        searchInput.addEventListener('input', handleSearch);
+        // จับเหตุการณ์ Event ต่างๆ
+        searchInput.addEventListener('input', handleSearch); // ค้นหาทันทีที่พิมพ์/ยิงบาร์โค้ด
         
-        startScanBtn.addEventListener('click', startScanner);
-        closeScanBtn.addEventListener('click', stopScanner);
+        cameraBtn.addEventListener('click', startScanner);
+        closeScannerBtn.addEventListener('click', stopScanner);
 
-        clearSearchBtn.addEventListener('click', () => {
-            searchInput.value = '';
-            handleSearch();
-            searchInput.focus();
-        });
-
-        // Initialize App & Auto Focus Input
-        window.onload = () => {
-            fetchData();
-            searchInput.focus();
-        };
+        // เริ่มโหลดข้อมูลเมื่อเปิดเว็บ
+        fetchSheetData();
 
     </script>
 </body>
