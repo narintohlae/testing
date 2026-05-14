@@ -6,6 +6,8 @@
     <title>ระบบเช็คราคาสินค้า</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- เพิ่ม Library สำหรับสแกนบาร์โค้ดผ่านกล้อง -->
+    <script src="https://unpkg.com/html5-qrcode"></script>
     <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
     <style>
@@ -42,15 +44,22 @@
                     <input 
                         type="text" 
                         id="searchInput" 
-                        class="w-full pl-12 pr-10 py-3 rounded-2xl border-none shadow-inner focus:ring-4 focus:ring-blue-300 text-lg transition-all outline-none" 
+                        class="w-full pl-12 pr-24 py-3 rounded-2xl border-none shadow-inner focus:ring-4 focus:ring-blue-300 text-lg transition-all outline-none" 
                         placeholder="ค้นหาชื่อสินค้า, รหัส, บาร์โค้ด..."
                         autocomplete="off"
                     >
-                    <button id="clearSearchBtn" class="absolute inset-y-0 right-0 pr-4 flex items-center hidden">
-                        <svg class="w-5 h-5 text-gray-400 hover:text-gray-600" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
-                        </svg>
-                    </button>
+                    <div class="absolute inset-y-0 right-0 pr-2 flex items-center gap-1">
+                        <!-- ปุ่มเปิดกล้องสแกน (ใหม่) -->
+                        <button id="startScanBtn" class="p-2 text-gray-500 hover:text-blue-600 transition bg-white rounded-xl shadow-sm border border-gray-100" aria-label="สแกนบาร์โค้ด">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                        </button>
+                        <!-- ปุ่มลบคำค้นหา -->
+                        <button id="clearSearchBtn" class="p-2 text-gray-400 hover:text-gray-600 hidden bg-white rounded-xl">
+                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
             </div>
             
@@ -67,6 +76,24 @@
         <!-- Content Area -->
         <main class="p-4" id="mainContainer">
             
+            <!-- หน้าต่างสแกนเนอร์ (ซ่อนเป็นค่าเริ่มต้น) -->
+            <div id="scannerModal" class="fixed inset-0 bg-black z-[100] hidden flex-col">
+                <div class="flex justify-between items-center p-4 pt-safe-top bg-gray-900 text-white shadow-md z-10 border-b border-gray-800">
+                    <h3 class="text-lg font-semibold flex items-center gap-2 mt-4">
+                        <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm14 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
+                        สแกนบาร์โค้ด
+                    </h3>
+                    <button id="closeScanBtn" class="px-5 py-2 mt-4 bg-red-600 hover:bg-red-700 rounded-full text-white font-medium transition-colors text-sm">ยกเลิก</button>
+                </div>
+                <!-- พื้นที่แสดงกล้อง -->
+                <div class="flex-1 w-full relative flex items-center justify-center bg-black overflow-hidden">
+                    <div id="reader" class="w-full h-full max-w-lg mx-auto"></div>
+                </div>
+                <div class="p-6 pb-12 bg-gray-900 text-center pb-safe-bottom">
+                    <p class="text-gray-300 text-sm" id="scannerMessage">หันกล้องไปที่บาร์โค้ด ระบบจะค้นหาอัตโนมัติ</p>
+                </div>
+            </div>
+
             <!-- Loading State -->
             <div id="loadingState" class="flex flex-col items-center justify-center py-20">
                 <div class="animate-spin rounded-full h-14 w-14 border-b-4 border-blue-600 mb-4"></div>
@@ -124,6 +151,12 @@
         const noResultsState = document.getElementById('noResultsState');
         const initialState = document.getElementById('initialState');
         const totalItemsCount = document.getElementById('totalItemsCount');
+
+        const startScanBtn = document.getElementById('startScanBtn');
+        const closeScanBtn = document.getElementById('closeScanBtn');
+        const scannerModal = document.getElementById('scannerModal');
+        const scannerMessage = document.getElementById('scannerMessage');
+        let html5QrCode;
 
         async function fetchData() {
             showState('loading');
@@ -285,8 +318,77 @@
             }
         }
 
+        function initScanner() {
+            if (!html5QrCode) {
+                html5QrCode = new Html5Qrcode("reader");
+            }
+        }
+
+        async function startScanner() {
+            scannerModal.classList.remove('hidden');
+            scannerMessage.innerHTML = "กำลังเตรียมกล้อง... <br><span class='text-xs text-gray-500'>(หากระบบขอสิทธิ์เข้าถึงกล้อง โปรดกดยืนยัน)</span>";
+            scannerMessage.className = "text-gray-300 text-sm";
+            
+            initScanner();
+
+            // ตั้งค่ากรอบสแกนให้เหมาะกับบาร์โค้ดแนวนอนบนมือถือ
+            const config = { 
+                fps: 10, 
+                qrbox: { width: 280, height: 120 },
+                aspectRatio: window.innerWidth / window.innerHeight
+            };
+            
+            try {
+                // เรียกใช้กล้องหลัง (environment)
+                await html5QrCode.start(
+                    { facingMode: "environment" }, 
+                    config,
+                    (decodedText, decodedResult) => {
+                        // เมื่อสแกนสำเร็จ
+                        stopScanner();
+                        
+                        // สั่นเครื่องเบาๆ ถ้ามือถือรองรับ
+                        if (navigator.vibrate) {
+                            navigator.vibrate(200);
+                        }
+                        
+                        // นำค่าบาร์โค้ดไปใส่ช่องค้นหา และรันการค้นหา
+                        searchInput.value = decodedText;
+                        handleSearch();
+                    },
+                    (errorMessage) => {
+                        // ไม่ต้องทำอะไรหากอ่านไม่ออก (ระบบจะอ่านเฟรมไปเรื่อยๆ)
+                    }
+                );
+                scannerMessage.textContent = "หันกล้องให้บาร์โค้ดอยู่ตรงกลางกรอบ";
+            } catch (err) {
+                console.error("Camera start error:", err);
+                scannerMessage.innerHTML = `
+                    <span class="text-red-400 font-semibold">❌ ไม่สามารถเปิดกล้องได้</span><br>
+                    <span class="text-xs text-gray-400 mt-2 block">1. โปรดอนุญาตให้เบราว์เซอร์เข้าถึงกล้อง<br>2. iPhone ต้องเปิดใช้งานเว็บผ่านลิ้งค์ <b>HTTPS</b> เท่านั้น</span>
+                `;
+            }
+        }
+
+        async function stopScanner() {
+            if (html5QrCode && html5QrCode.isScanning) {
+                try {
+                    await html5QrCode.stop();
+                } catch (err) {
+                    console.error("Failed to stop scanner", err);
+                }
+            }
+            scannerModal.classList.add('hidden');
+            // คืนโฟกัสให้ช่องค้นหา
+            searchInput.focus();
+        }
+
         // Event Listeners
         searchInput.addEventListener('input', handleSearch);
+        
+        startScanBtn.addEventListener('click', startScanner);
+        closeScanBtn.addEventListener('click', stopScanner);
+
         clearSearchBtn.addEventListener('click', () => {
             searchInput.value = '';
             handleSearch();
