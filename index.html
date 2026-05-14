@@ -183,28 +183,27 @@
             // สร้างกล่องสินค้าแต่ละชิ้น
             results.forEach(item => {
                 const card = document.createElement('div');
-                card.className = 'bg-white rounded-xl shadow-sm p-4 border border-gray-100 flex flex-col justify-between items-start hover:shadow-md transition-shadow relative overflow-hidden';
-                
-                // แถบสีตกแต่งด้านซ้าย
-                const accent = document.createElement('div');
-                accent.className = 'absolute left-0 top-0 bottom-0 w-1 bg-blue-500';
-                card.appendChild(accent);
+                card.className = 'bg-white rounded-2xl shadow-md p-4 border border-gray-100 flex flex-col hover:shadow-lg transition-shadow';
 
-                // โครงสร้างภายในกล่อง
+                // โครงสร้างภายในกล่อง (เน้นราคาให้เด่นที่สุด)
                 card.innerHTML += `
-                    <div class="w-full flex justify-between items-start gap-2 pl-2">
-                        <div class="flex-1">
-                            <h3 class="text-lg font-bold text-gray-800 leading-tight mb-1">${item.name || 'ไม่มีชื่อสินค้า'}</h3>
-                            <p class="text-sm text-gray-400 barcode-font flex items-center">
+                    <div class="flex flex-col gap-3 w-full">
+                        <!-- ส่วนชื่อสินค้าและบาร์โค้ด -->
+                        <div class="pl-3 border-l-4 border-blue-500">
+                            <h3 class="text-xl font-bold text-gray-800 leading-tight mb-1">${item.name || 'ไม่มีชื่อสินค้า'}</h3>
+                            <p class="text-sm text-gray-500 barcode-font flex items-center">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm14 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" /></svg>
                                 ${item.barcode || '-'}
                             </p>
                         </div>
-                        <div class="bg-blue-50 rounded-lg p-2 text-right min-w-[80px]">
-                            <p class="text-xs text-blue-500 font-semibold mb-0.5">ราคา</p>
-                            <p class="text-xl font-extrabold text-blue-700 whitespace-nowrap">
-                                ${item.price || '0'} <span class="text-sm font-normal text-blue-600">/ ${item.unit || 'ชิ้น'}</span>
-                            </p>
+                        
+                        <!-- ส่วนราคา (ขนาดใหญ่พิเศษ) -->
+                        <div class="bg-yellow-50 border-2 border-yellow-400 rounded-xl p-4 mt-2 flex justify-between items-center shadow-sm">
+                            <span class="text-yellow-700 font-bold text-lg">ราคา</span>
+                            <div class="text-right">
+                                <span class="text-6xl font-black text-red-600 tracking-tighter drop-shadow-sm leading-none">${item.price || '0'}</span>
+                                <span class="text-xl font-bold text-gray-600 ml-1">/ ${item.unit || 'ชิ้น'}</span>
+                            </div>
                         </div>
                     </div>
                 `;
