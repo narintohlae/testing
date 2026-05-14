@@ -2,269 +2,303 @@
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NextGen Wallet 2026</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ระบบเช็คราคาสินค้า</title>
+    
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
     <style>
-        body { 
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-            min-height: 100vh; 
-            font-family: 'Inter', sans-serif;
+        body {
+            font-family: 'Prompt', sans-serif;
+            background-color: #f3f4f6;
         }
-        .glass-panel { 
-            background: rgba(255, 255, 255, 0.95); 
-            backdrop-filter: blur(10px); 
-            border-radius: 2rem; 
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        /* Hide scrollbar for cleaner mobile look */
+        ::-webkit-scrollbar {
+            width: 0px;
+            background: transparent;
         }
-        .custom-scroll::-webkit-scrollbar { width: 4px; }
-        .custom-scroll::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
-        .balance-card {
-            background: linear-gradient(to right, #4facfe 0%, #00f2fe 100%);
+        .glass-header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
         }
     </style>
 </head>
-<body class="flex items-center justify-center p-4">
+<body class="text-gray-800 antialiased">
 
-    <div class="glass-panel w-full max-w-md p-6 flex flex-col gap-6">
-        <!-- Header -->
-        <div class="flex justify-between items-center">
-            <h1 class="text-2xl font-bold text-gray-800 flex items-center gap-2">
-                <i class="fas fa-wallet text-indigo-600"></i> Smart Wallet
-            </h1>
-            <div id="petStatus" class="text-4xl transition-all duration-300 transform hover:scale-125 cursor-help" title="สถานะการเงินของคุณ">😺</div>
-        </div>
-
-        <!-- ยอดเงินคงเหลือ -->
-        <div class="balance-card p-6 rounded-3xl shadow-lg text-white text-center">
-            <p class="opacity-80 text-sm font-medium mb-1">ยอดเงินคงเหลือปัจจุบัน</p>
-            <h2 id="totalBalance" class="text-4xl font-black tracking-tight">฿0.00</h2>
-            <div id="authStatus" class="text-[10px] mt-2 opacity-50 font-mono">กำลังเชื่อมต่อ...</div>
-        </div>
-
-        <!-- Smart Input -->
-        <div class="flex flex-col gap-3 bg-gray-50 p-4 rounded-2xl border border-gray-100">
-            <div class="flex justify-between items-center">
-                <label class="text-xs font-bold text-gray-500 uppercase">
-                    <i class="fas fa-bolt text-yellow-500 mr-1"></i> Quick Add
-                </label>
-                <span class="text-[10px] text-gray-400">ตัวอย่าง: กาแฟ 60 หรือ โบนัส +500</span>
-            </div>
-            <div class="flex gap-2">
-                <input type="text" id="smartInput" 
-                    placeholder="พิมพ์ชื่อและจำนวนเงิน..." 
-                    class="w-full px-4 py-3 rounded-xl border-2 border-transparent bg-white shadow-sm focus:border-indigo-400 focus:outline-none transition-all">
-                <button id="addBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white w-12 h-12 flex items-center justify-center rounded-xl shadow-lg transition-transform active:scale-95">
-                    <i class="fas fa-plus"></i>
-                </button>
-            </div>
-        </div>
-
-        <!-- รายการธุรกรรม -->
-        <div>
-            <div class="flex justify-between items-end mb-3">
-                <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest">ประวัติรายการ</h3>
-                <span id="itemCount" class="text-xs text-gray-400">0 รายการ</span>
-            </div>
-            <div id="transactionList" class="flex flex-col gap-3 max-h-[320px] overflow-y-auto pr-1 custom-scroll">
-                <!-- รายการจะมาปรากฏที่นี่ -->
-                <div class="py-10 text-center opacity-40">
-                    <i class="fas fa-circle-notch fa-spin text-2xl mb-2"></i>
-                    <p class="text-sm">กำลังโหลดข้อมูล...</p>
+    <div class="max-w-md mx-auto min-h-screen bg-gray-50 shadow-xl relative pb-6">
+        
+        <!-- Header & Search Bar (Sticky) -->
+        <header class="glass-header sticky top-0 z-10 border-b border-gray-200 shadow-sm pt-safe">
+            <div class="px-5 pt-6 pb-4 bg-blue-600 rounded-b-3xl shadow-md">
+                <h1 class="text-2xl font-bold text-white mb-4 text-center">เช็คราคาสินค้า</h1>
+                
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                        </svg>
+                    </div>
+                    <input 
+                        type="text" 
+                        id="searchInput" 
+                        class="w-full pl-12 pr-10 py-3 rounded-2xl border-none shadow-inner focus:ring-4 focus:ring-blue-300 text-lg transition-all outline-none" 
+                        placeholder="ค้นหาชื่อสินค้า, รหัส, บาร์โค้ด..."
+                        autocomplete="off"
+                    >
+                    <button id="clearSearchBtn" class="absolute inset-y-0 right-0 pr-4 flex items-center hidden">
+                        <svg class="w-5 h-5 text-gray-400 hover:text-gray-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
+                        </svg>
+                    </button>
                 </div>
             </div>
-        </div>
+            
+            <!-- Stats / Info row -->
+            <div class="flex justify-between items-center px-6 py-3 bg-white text-sm text-gray-500 font-medium">
+                <span id="totalItemsCount">กำลังโหลด...</span>
+                <button onclick="fetchData()" class="text-blue-500 flex items-center gap-1 hover:text-blue-700">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                    รีเฟรช
+                </button>
+            </div>
+        </header>
+
+        <!-- Content Area -->
+        <main class="p-4" id="mainContainer">
+            
+            <!-- Loading State -->
+            <div id="loadingState" class="flex flex-col items-center justify-center py-20">
+                <div class="animate-spin rounded-full h-14 w-14 border-b-4 border-blue-600 mb-4"></div>
+                <p class="text-gray-500 text-lg">กำลังดึงข้อมูล...</p>
+            </div>
+
+            <!-- Error State -->
+            <div id="errorState" class="hidden flex-col items-center justify-center py-20 text-center px-4">
+                <svg class="w-16 h-16 text-red-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <h3 class="text-xl font-semibold text-gray-800 mb-2">เกิดข้อผิดพลาด</h3>
+                <p class="text-gray-500 mb-4" id="errorMessage">ไม่สามารถดึงข้อมูลได้ โปรดตรวจสอบว่า Google Sheet ได้เปิดแชร์สาธารณะ (Anyone with the link) แล้ว</p>
+                <button onclick="fetchData()" class="px-6 py-2 bg-blue-600 text-white rounded-full shadow hover:bg-blue-700 transition">ลองใหม่อีกครั้ง</button>
+            </div>
+
+            <!-- No Results State -->
+            <div id="noResultsState" class="hidden flex-col items-center justify-center py-20 text-center">
+                <svg class="w-16 h-16 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <h3 class="text-lg font-semibold text-gray-600">ไม่พบสินค้าที่คุณค้นหา</h3>
+                <p class="text-gray-400 text-sm mt-1">ลองใช้คำค้นหาอื่น หรือตรวจสอบตัวสะกด</p>
+            </div>
+
+            <!-- Initial Ready State (New) -->
+            <div id="initialState" class="hidden flex-col items-center justify-center py-24 text-center px-4">
+                <div class="bg-blue-50 p-6 rounded-full mb-4 shadow-inner">
+                    <svg class="w-12 h-12 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm14 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
+                </div>
+                <h3 class="text-xl font-bold text-gray-800 mb-2">พร้อมสแกน / ค้นหา</h3>
+                <p class="text-gray-500 text-sm">สแกนบาร์โค้ด หรือพิมพ์ชื่อสินค้า<br>ระบบจะแสดงผลลัพธ์ทันที</p>
+            </div>
+
+            <!-- Products List -->
+            <div id="productsList" class="flex flex-col gap-4 hidden">
+                <!-- Cards will be injected here -->
+            </div>
+
+        </main>
     </div>
 
-    <!-- Firebase SDK -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, doc, addDoc, onSnapshot, query, serverTimestamp, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    <script>
+        // Google Sheet Configuration
+        const SHEET_ID = '1N2Yja6aMNWN-ZPid8nWq-sV3XgB0exmoHue3hdeUrFk';
+        const GID = '0';
+        const JSON_ENDPOINT = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${GID}`;
 
-        // Global Configurations
-        const firebaseConfig = JSON.parse(__firebase_config);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'expense-tracker-2026';
-        
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
+        // App State
+        let allProducts = [];
+        let sheetHeaders = [];
 
         // DOM Elements
-        const smartInput = document.getElementById('smartInput');
-        const addBtn = document.getElementById('addBtn');
-        const transactionList = document.getElementById('transactionList');
-        const totalBalanceEl = document.getElementById('totalBalance');
-        const petStatus = document.getElementById('petStatus');
-        const authStatus = document.getElementById('authStatus');
-        const itemCount = document.getElementById('itemCount');
+        const searchInput = document.getElementById('searchInput');
+        const clearSearchBtn = document.getElementById('clearSearchBtn');
+        const productsList = document.getElementById('productsList');
+        const loadingState = document.getElementById('loadingState');
+        const errorState = document.getElementById('errorState');
+        const noResultsState = document.getElementById('noResultsState');
+        const initialState = document.getElementById('initialState');
+        const totalItemsCount = document.getElementById('totalItemsCount');
 
-        let currentUser = null;
-
-        // Authentication Initialization
-        const initAuth = async () => {
+        async function fetchData() {
+            showState('loading');
             try {
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
-            } catch (err) {
-                console.error("Auth Error:", err);
-                authStatus.innerText = "การเชื่อมต่อล้มเหลว";
+                const response = await fetch(JSON_ENDPOINT);
+                if (!response.ok) throw new Error('Network response was not ok');
+                
+                const text = await response.text();
+                // Extract JSON from Google's response format
+                const jsonMatch = text.match(/google\.visualization\.Query\.setResponse\(([\s\S\w]+)\);/);
+                
+                if (!jsonMatch) throw new Error('Invalid data format received');
+                
+                const data = JSON.parse(jsonMatch[1]);
+                processData(data);
+                
+            } catch (error) {
+                console.error("Error fetching data:", error);
+                showState('error');
             }
-        };
-
-        onAuthStateChanged(auth, (user) => {
-            currentUser = user;
-            if (user) {
-                authStatus.innerText = `UID: ${user.uid.substring(0, 8)}...`;
-                setupDataListener(user.uid);
-            }
-        });
-
-        initAuth();
-
-        // Data Listener (Rule 1 & 2)
-        function setupDataListener(userId) {
-            // Path: /artifacts/{appId}/users/{userId}/transactions
-            const txCol = collection(db, 'artifacts', appId, 'users', userId, 'transactions');
-            
-            // Simple query (Rule 2: No complex ordering in Firestore to avoid index requirement)
-            onSnapshot(txCol, (snapshot) => {
-                const transactions = [];
-                snapshot.forEach(doc => {
-                    transactions.push({ id: doc.id, ...doc.data() });
-                });
-
-                // Sort in memory (Rule 2)
-                transactions.sort((a, b) => {
-                    const timeA = a.createdAt?.seconds || 0;
-                    const timeB = b.createdAt?.seconds || 0;
-                    return timeB - timeA;
-                });
-
-                renderUI(transactions);
-            }, (error) => {
-                console.error("Firestore Error:", error);
-                transactionList.innerHTML = `<p class="text-center text-red-500 text-xs py-4">เกิดข้อผิดพลาดในการดึงข้อมูล</p>`;
-            });
         }
 
-        function renderUI(data) {
-            transactionList.innerHTML = '';
-            let total = 0;
+        function processData(data) {
+            // ดึงหัวข้อคอลัมน์จาก Sheet
+            sheetHeaders = data.table.cols.map((col, index) => col.label ? col.label.trim() : `Column${index + 1}`);
+            
+            // กำหนดหัวข้อที่ต้องการดึงข้อมูล
+            const targetCols = ['บาร์โค้ด', 'สินค้า', 'รวม', 'หน่วย'];
 
-            if (data.length === 0) {
-                transactionList.innerHTML = `
-                    <div class="py-10 text-center opacity-30 border-2 border-dashed border-gray-200 rounded-2xl">
-                        <i class="fas fa-receipt text-3xl mb-2"></i>
-                        <p class="text-sm font-medium">ยังไม่มีรายการบันทึก</p>
-                    </div>
-                `;
-                totalBalanceEl.innerText = '฿0.00';
-                itemCount.innerText = '0 รายการ';
+            // Map ข้อมูลเฉพาะคอลัมน์ที่กำหนด
+            allProducts = data.table.rows.map(row => {
+                let item = {};
+                row.c.forEach((cell, i) => {
+                    const headerName = sheetHeaders[i];
+                    const value = cell ? (cell.f || cell.v || '') : '';
+                    
+                    // เช็คว่าชื่อคอลัมน์ตรงกับ 4 หัวข้อที่ต้องการหรือไม่
+                    targetCols.forEach(target => {
+                        if (headerName.includes(target)) {
+                            item[target] = value;
+                        }
+                    });
+                });
+                return item;
+            });
+
+            // กรองแถวที่ว่างเปล่าออกไป
+            allProducts = allProducts.filter(item => {
+                return Object.values(item).some(val => val.toString().trim() !== '');
+            });
+
+            // ตรวจสอบว่ามีการค้นหาค้างอยู่หรือไม่
+            if(searchInput.value) {
+                handleSearch();
+            } else {
+                totalItemsCount.textContent = `ข้อมูลพร้อมแล้ว (${allProducts.length} รายการ)`;
+                showState('initial');
+            }
+        }
+
+        function renderProducts(items) {
+            productsList.innerHTML = '';
+            
+            if (items.length === 0) {
+                showState('noResults');
                 return;
             }
 
-            data.forEach(item => {
-                const isIncome = item.type === 'income';
-                total += isIncome ? item.amount : -item.amount;
+            items.forEach(item => {
+                // ดึงค่าตาม Key ที่เจาะจงไว้
+                const titleText = item['สินค้า'] || 'ไม่ระบุชื่อสินค้า';
+                const barcodeText = item['บาร์โค้ด'] || '-';
+                let priceText = item['รวม'] || '-';
+                const unitText = item['หน่วย'] || '';
+                
+                // ใส่ลูกน้ำ (comma) ให้ตัวเลขราคา
+                if(!isNaN(priceText) && priceText !== '' && priceText !== '-') {
+                    priceText = Number(priceText).toLocaleString('th-TH');
+                }
 
+                // จัดรูปแบบ ราคา + หน่วย
+                let priceDisplay = priceText;
+                if (priceDisplay !== '-') {
+                    priceDisplay += ' ฿';
+                    if (unitText) {
+                        priceDisplay += `<span class="text-sm font-normal text-blue-600 ml-1">/ ${unitText}</span>`;
+                    }
+                }
+
+                // สร้าง HTML สำหรับแต่ละรายการ
                 const card = document.createElement('div');
-                card.className = "flex items-center justify-between p-4 bg-white rounded-2xl shadow-sm border border-gray-50 hover:border-indigo-100 transition-all group";
+                card.className = "bg-white p-5 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow duration-200 relative overflow-hidden";
+                
+                // แถบสีด้านซ้าย
+                const isHighlight = parseFloat(item['รวม'] || 0) > 0;
+                const highlightColor = isHighlight ? 'bg-blue-500' : 'bg-gray-300';
+                
                 card.innerHTML = `
-                    <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 flex items-center justify-center rounded-full ${isIncome ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-500'}">
-                            <i class="fas ${isIncome ? 'fa-arrow-up' : 'fa-arrow-down'} text-sm"></i>
+                    <div class="absolute left-0 top-0 bottom-0 w-1 ${highlightColor}"></div>
+                    <div class="pl-2">
+                        <div class="flex justify-between items-start gap-3 mb-3">
+                            <h2 class="text-lg font-semibold text-gray-800 leading-tight">${titleText}</h2>
+                            <div class="bg-blue-50 text-blue-700 px-3 py-1.5 rounded-lg font-bold whitespace-nowrap shadow-sm text-right shrink-0">
+                                <div class="text-lg leading-none">${priceDisplay}</div>
+                            </div>
                         </div>
-                        <div>
-                            <p class="font-bold text-gray-700 text-sm">${item.title}</p>
-                            <p class="text-[10px] text-gray-400">${item.createdAt ? new Date(item.createdAt.seconds * 1000).toLocaleTimeString('th-TH') : 'กำลังบันทึก...'}</p>
+                        <div class="space-y-1">
+                            <div class="flex justify-between items-center text-sm mt-1 border-b border-gray-50 border-dashed pb-1">
+                                <span class="text-gray-400">บาร์โค้ด:</span>
+                                <span class="text-gray-600 font-mono bg-gray-100 px-2 py-0.5 rounded text-xs">${barcodeText}</span>
+                            </div>
                         </div>
-                    </div>
-                    <div class="flex items-center gap-3">
-                        <span class="font-bold ${isIncome ? 'text-green-600' : 'text-red-500'}">
-                            ${isIncome ? '+' : '-'}฿${item.amount.toLocaleString(undefined, {minimumFractionDigits: 2})}
-                        </span>
-                        <button onclick="window.deleteItem('${item.id}')" class="opacity-0 group-hover:opacity-100 p-2 text-gray-300 hover:text-red-400 transition-all">
-                            <i class="fas fa-trash-can text-xs"></i>
-                        </button>
                     </div>
                 `;
-                transactionList.appendChild(card);
+                
+                productsList.appendChild(card);
             });
-
-            // Update Header Info
-            totalBalanceEl.innerText = `฿${total.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
-            itemCount.innerText = `${data.length} รายการ`;
-
-            // Pet Logic
-            if (total > 50000) petStatus.innerText = '🤑';
-            else if (total > 10000) petStatus.innerText = '😎';
-            else if (total > 1000) petStatus.innerText = '😸';
-            else if (total >= 0) petStatus.innerText = '😺';
-            else if (total > -2000) petStatus.innerText = '😰';
-            else petStatus.innerText = '😿';
+            
+            showState('content');
         }
 
-        // Add Logic
-        const addTransaction = async () => {
-            if (!currentUser) return;
-            const text = smartInput.value.trim();
-            if (!text) return;
-
-            // Regex: match name and amount (e.g., "coffee 60" or "bonus +500")
-            const match = text.match(/(.*?)\s+([+-]?\d+(?:\.\d+)?)$/);
+        function handleSearch() {
+            const query = searchInput.value.toLowerCase().trim();
             
-            if (match) {
-                let title = match[1].trim();
-                let amount = parseFloat(match[2]);
-                let type = (text.includes('+') || amount > 0) ? 'income' : 'expense';
-                if (text.includes('-')) type = 'expense';
-                
-                amount = Math.abs(amount);
-
-                addBtn.disabled = true;
-                addBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-
-                try {
-                    const txCol = collection(db, 'artifacts', appId, 'users', currentUser.uid, 'transactions');
-                    await addDoc(txCol, {
-                        title: title || 'ไม่ระบุชื่อ',
-                        amount: amount,
-                        type: type,
-                        createdAt: serverTimestamp()
-                    });
-                    smartInput.value = '';
-                } catch (err) {
-                    console.error("Save Error:", err);
-                } finally {
-                    addBtn.disabled = false;
-                    addBtn.innerHTML = '<i class="fas fa-plus"></i>';
-                }
-            } else {
-                smartInput.classList.add('border-red-400');
-                setTimeout(() => smartInput.classList.remove('border-red-400'), 1000);
+            // Toggle clear button visibility
+            clearSearchBtn.classList.toggle('hidden', query.length === 0);
+            
+            if (query === '') {
+                // ถ้าไม่ได้พิมพ์อะไรเลย ให้แสดงหน้าพร้อมใช้งาน ไม่แสดงสินค้าทั้งหมด
+                totalItemsCount.textContent = `ข้อมูลพร้อมแล้ว (${allProducts.length} รายการ)`;
+                showState('initial');
+                return;
             }
-        };
 
-        // Delete Logic
-        window.deleteItem = async (id) => {
-            if (!currentUser || !confirm('ยืนยันการลบรายการนี้?')) return;
-            try {
-                const docRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'transactions', id);
-                await deleteDoc(docRef);
-            } catch (err) {
-                console.error("Delete Error:", err);
+            const filtered = allProducts.filter(item => {
+                // Search across all values in the object
+                return Object.values(item).some(val => 
+                    val.toString().toLowerCase().includes(query)
+                );
+            });
+
+            totalItemsCount.textContent = `ค้นพบ ${filtered.length} รายการ`;
+            renderProducts(filtered);
+        }
+
+        function showState(state) {
+            loadingState.classList.add('hidden');
+            errorState.classList.add('hidden');
+            noResultsState.classList.add('hidden');
+            productsList.classList.add('hidden');
+            initialState.classList.add('hidden');
+
+            switch(state) {
+                case 'loading': loadingState.classList.remove('hidden'); break;
+                case 'error': errorState.classList.remove('hidden'); break;
+                case 'noResults': noResultsState.classList.remove('hidden'); break;
+                case 'content': productsList.classList.remove('hidden'); break;
+                case 'initial': initialState.classList.remove('hidden'); break;
             }
-        };
+        }
 
-        addBtn.addEventListener('click', addTransaction);
-        smartInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') addTransaction();
+        // Event Listeners
+        searchInput.addEventListener('input', handleSearch);
+        clearSearchBtn.addEventListener('click', () => {
+            searchInput.value = '';
+            handleSearch();
+            searchInput.focus();
         });
+
+        // Initialize App & Auto Focus Input
+        window.onload = () => {
+            fetchData();
+            searchInput.focus();
+        };
+
     </script>
 </body>
 </html>
